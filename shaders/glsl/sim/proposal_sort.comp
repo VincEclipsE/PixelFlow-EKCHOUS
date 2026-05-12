@@ -1,0 +1,22 @@
+#version 430 core
+//
+// Pass 5: ProposalSort
+// Day-One-stub. The single most load-bearing shader for determinism:
+// every contended write goes through here.
+//
+// TODO_CORPUS(determinism::reduction-strategy)
+//
+// Algorithm: radix sort on packed u64 keys (target_cell << 32 | stable_key).
+// Workgroup-bounded scan via Kogge-Stone prefix sum with fixed workgroup
+// size (256 threads). Fall back to bitonic sort if a chunk's proposal count
+// exceeds the radix sort's per-workgroup limit.
+//
+// Determinism: input keys are stable (deterministic stable_key per source
+// pixel + emit_tick); radix sort over fixed-width keys produces stable
+// output order; the resolve pass that follows is single-writer.
+
+layout(local_size_x = 256, local_size_y = 1, local_size_z = 1) in;
+
+void main() {
+    // Day-One stub: no-op.
+}

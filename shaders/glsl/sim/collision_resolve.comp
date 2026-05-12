@@ -1,0 +1,25 @@
+#version 430 core
+//
+// Pass 12: CollisionResolve
+// Day-One-stub. See in_flux_integrate.comp header for the determinism
+// discipline; the same rules apply here.
+//
+// TODO_CORPUS(determinism::propose-then-resolve)
+// TODO_PIXELFLOW_PORT(accelerationstructures/DwCollisionGrid.java)
+//
+// Algorithm (when implemented):
+//   1. Each thread reads its assigned in_flux particle's target cell.
+//   2. If the cell is occupied, propose a snap to an alternate cell via
+//      atomicAdd on the chunk's proposal counter.
+//   3. Sort proposals by (target_cell, stable_key) in a separate pass.
+//   4. A second invocation of THIS shader (resolve mode) walks the sorted
+//      proposals and applies the winner with a non-atomic write.
+//
+// CRITICAL: never use imageAtomicCAS. Cross-vendor ordering is
+// implementation-defined; bit-determinism breaks immediately.
+
+layout(local_size_x = 64, local_size_y = 1, local_size_z = 1) in;
+
+void main() {
+    // Day-One stub: no-op.
+}
