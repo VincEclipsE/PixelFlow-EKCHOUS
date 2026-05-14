@@ -196,8 +196,17 @@ bool Engine::init_window() {
         LOG_ERROR("glfwInit failed");
         return false;
     }
+    // macOS caps OpenGL at 4.1; request 3.3 core there since the runtime
+    // path (ImGui draw lists + glDrawArrays) only needs GL 3.3 features.
+    // Other platforms get 4.3 in case the dormant gpu/* compute path is
+    // wired up later.
+#ifdef __APPLE__
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+#else
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+#endif
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
     glfwWindowHint(GLFW_OPENGL_FORWARD_COMPAT, GLFW_TRUE);
 
