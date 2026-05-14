@@ -14,15 +14,19 @@
 // without changing the file layout.
 
 #include "engine/core/Types.h"
-#include <array>
 #include <cstring>
+#include <vector>
 
 namespace ekchous::sim {
 
-constexpr int kChunkSize = 64;
-constexpr int kChunkPixelCount = kChunkSize * kChunkSize;
+// Default sim chunk resolution. Corpus tunable range: 64×64 to 256×256.
+// The first-pass value of 64 matches the GPU compute workgroup size.
+constexpr int kDefaultChunkSize = 64;
 
 // 16-byte packed pixel slot, matching docs/data-layout.md exactly.
+// Byte offsets in the spec are unaligned (i16 at offset 3, u16 at offset 5,
+// u16 at offset 11), so the struct must be byte-packed across all compilers.
+#pragma pack(push, 1)
 struct PixelSlot {
     core::u8  element_id;                  // 0
     core::u8  state_flags;                 // 1: state(2) | integration_mode(1) | mutation(1) | body_membership_flags(4)
@@ -36,7 +40,7 @@ struct PixelSlot {
     core::u16 body_id_low;                 // 11..12
     core::u8  body_id_high;                // 13
     core::u8  flags;                       // 14
-    core::u8  _pad;                        // 15
+    core::u8  color_jitter;                // 15 — repurposed from _pad: render-side hue jitter
 
     constexpr core::PixelState state() const noexcept {
         return static_cast<core::PixelState>(state_flags & 0b11);
@@ -45,23 +49,27 @@ struct PixelSlot {
         state_flags = (state_flags & ~0b11) | static_cast<core::u8>(s);
     }
 };
+#pragma pack(pop)
 static_assert(sizeof(PixelSlot) == 16, "PixelSlot must be exactly 16 bytes per data-layout.md");
 
 class Chunk {
 public:
-    Chunk();
+    explicit Chunk(int size = kDefaultChunkSize)
+        : size_(size), pixels_(static_cast<std::size_t>(size) * size) {}
 
     void clear();
 
+    int size() const noexcept { return size_; }
+
     PixelSlot& at(int x, int y) noexcept {
-        return pixels_[y * kChunkSize + x];
+        return pixels_[static_cast<std::size_t>(y) * size_ + x];
     }
     const PixelSlot& at(int x, int y) const noexcept {
-        return pixels_[y * kChunkSize + x];
+        return pixels_[static_cast<std::size_t>(y) * size_ + x];
     }
 
     bool in_bounds(int x, int y) const noexcept {
-        return x >= 0 && x < kChunkSize && y >= 0 && y < kChunkSize;
+        return x >= 0 && x < size_ && y >= 0 && y < size_;
     }
 
     // Raw bytes for golden hashing.
@@ -73,7 +81,8 @@ public:
     }
 
 private:
-    std::array<PixelSlot, kChunkPixelCount> pixels_;
+    int size_;
+    std::vector<PixelSlot> pixels_;
 };
 
 } // namespace ekchous::sim

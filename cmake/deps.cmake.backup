@@ -23,15 +23,11 @@ FetchContent_MakeAvailable(glfw)
 # glad2 isn't a single git repo; we use the official prebuilt loader.
 # For Day-One, we vendor a minimal GL 4.3 core glad implementation here.
 # (In a real project, you'd generate via https://glad.dav1d.de/ and commit.)
+add_library(glad STATIC IMPORTED GLOBAL)
 if(NOT EXISTS "${CMAKE_SOURCE_DIR}/third_party/glad/include/glad/gl.h")
     message(WARNING "glad files not vendored yet. See third_party/glad/README.md to generate them.")
     # For now, expose an INTERFACE library so the rest of the build doesn't fail.
     add_library(glad INTERFACE)
-else()
-    add_library(glad STATIC
-        ${CMAKE_SOURCE_DIR}/third_party/glad/src/gl.c
-    )
-    target_include_directories(glad PUBLIC ${CMAKE_SOURCE_DIR}/third_party/glad/include)
 endif()
 
 # ---- glm (header-only math, render-side ONLY) ----

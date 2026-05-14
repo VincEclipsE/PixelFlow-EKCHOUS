@@ -8,6 +8,10 @@
 
 #include <catch2/catch_test_macros.hpp>
 #include "engine/sphere/CubedSphere.h"
+#include <set>
+#include <utility>
+#include <algorithm>
+#include <filesystem>
 
 using namespace ekchous;
 using namespace ekchous::sphere;
@@ -53,7 +57,8 @@ TEST_CASE("reciprocity: crossing a seam and crossing back returns to original fa
 
 TEST_CASE("serialize + load round-trip preserves all entries", "[sphere]") {
     auto original = FaceAdjacency::canonical();
-    const std::string tmp_path = "/tmp/ekchous_face_adjacency_test.bin";
+    const auto tmp_path = (std::filesystem::temp_directory_path()
+                           / "ekchous_face_adjacency_test.bin").string();
     original.save_to_file(tmp_path);
     auto loaded = FaceAdjacency::load_from_file(tmp_path);
     for (std::size_t i = 0; i < 24; ++i) {

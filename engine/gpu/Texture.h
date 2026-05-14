@@ -20,6 +20,12 @@ public:
     Texture() = default;
     ~Texture();
 
+    // Move-only: a Texture owns a GL name and must not be duplicated by copy.
+    Texture(const Texture&) = delete;
+    Texture& operator=(const Texture&) = delete;
+    Texture(Texture&& o) noexcept;
+    Texture& operator=(Texture&& o) noexcept;
+
     static Texture create_2d(core::u32 width, core::u32 height, TextureFormat fmt);
 
     void bind_unit(core::u32 unit) const;
