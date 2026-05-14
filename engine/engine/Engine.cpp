@@ -159,6 +159,26 @@ void template_linkage_editor(atoms::ParticleTemplate& t) {
         slider_input_float("emit vx jitter", &t.fp_emit_vx_jitter, 0.0f, 5.0f, "%.2f");
         slider_input_float("emit vy jitter", &t.fp_emit_vy_jitter, 0.0f, 5.0f, "%.2f");
     }
+    slider_input_float("friction (granular)", &t.friction, 0.0f, 1.0f, "%.2f");
+    ImGui::TextDisabled("0 = frictionless; 1 = full velocity kill on contact. ~0.8 piles like sand.");
+    ImGui::Separator();
+    {
+        const char* kColorModes[] = { "Element default", "Single color", "Quadrant texture" };
+        int cm = static_cast<int>(t.color_mode);
+        if (ImGui::Combo("color mode", &cm, kColorModes, IM_ARRAYSIZE(kColorModes))) {
+            t.color_mode = static_cast<atoms::ParticleTemplate::ColorMode>(cm);
+        }
+        if (t.color_mode == atoms::ParticleTemplate::ColorMode::Single) {
+            ImGui::ColorEdit3("single color", t.single_color);
+        } else if (t.color_mode == atoms::ParticleTemplate::ColorMode::Quadrant) {
+            ImGui::ColorEdit3("quadrant 0 (right)",  t.quadrant_colors[0]);
+            ImGui::ColorEdit3("quadrant 1 (bottom)", t.quadrant_colors[1]);
+            ImGui::ColorEdit3("quadrant 2 (left)",   t.quadrant_colors[2]);
+            ImGui::ColorEdit3("quadrant 3 (top)",    t.quadrant_colors[3]);
+        }
+    }
+    ImGui::Checkbox("remember severed bonds (kept with enabled=false)",
+                    &t.remember_severed_bonds);
 }
 } // namespace
 
@@ -458,6 +478,9 @@ void Engine::update(float timestep) {
         }
     }
 
+    // (Fickle bond formation pass removed — friction is now a per-particle
+    //  property applied during the collision response phase.)
+
     // EKCHOUS layer 4: rebuild the atom-field stamp from current positions.
     if (atom_field_enabled_) {
         atom_field_.rebuild(physics_.particles(), atom_field_radius_mul_);
@@ -517,7 +540,9 @@ void Engine::drop_ball(float x, float y) {
     spec.bend_spring_dist = ball_bend_dist_;
     spec.spring_damp_inc  = ball_spring_damp_;
     spec.spring_damp_dec  = ball_spring_damp_;
-    softbody::build_soft_ball(physics_, spec);
+    auto ball = softbody::build_soft_ball(physics_, spec);
+    stamp_active_template_on_indices(ball.particle_indices);
+    apply_active_spring_mode_to(ball.spring_indices);
 }
 
 void Engine::drop_rope(float x, float y) {
@@ -532,7 +557,9 @@ void Engine::drop_rope(float x, float y) {
     spec.spring_damp_inc  = rope_spring_damp_;
     spec.spring_damp_dec  = rope_spring_damp_;
     if (rope_pin_first_) spec.pinned.push_back(0);
-    softbody::build_soft_rope(physics_, spec);
+    auto rope = softbody::build_soft_rope(physics_, spec);
+    stamp_active_template_on_indices(rope.particle_indices);
+    apply_active_spring_mode_to(rope.spring_indices);
 }
 
 void Engine::preset_bowl() {
@@ -713,7 +740,9 @@ void Engine::drop_blob(float x, float y) {
     spec.spring_damp_inc    = blob_spring_damp_;
     spec.spring_damp_dec    = blob_spring_damp_;
     spec.seed               = static_cast<std::uint32_t>(blob_seed_);
-    softbody::build_poisson_blob(physics_, spec);
+    auto blob = softbody::build_poisson_blob(physics_, spec);
+    stamp_active_template_on_indices(blob.particle_indices);
+    apply_active_spring_mode_to(blob.spring_indices);
     // Re-seed for the next click so each blob is unique.
     ++blob_seed_;
 }
@@ -728,7 +757,9 @@ void Engine::drop_star(float x, float y) {
     spec.node_radius     = star_node_radius_;
     spec.spring_damp_inc = star_spring_damp_;
     spec.spring_damp_dec = star_spring_damp_;
-    softbody::build_soft_star(physics_, spec);
+    auto star = softbody::build_soft_star(physics_, spec);
+    stamp_active_template_on_indices(star.particle_indices);
+    apply_active_spring_mode_to(star.spring_indices);
 }
 
 void Engine::drop_atom(float x, float y) {
@@ -736,20 +767,49 @@ void Engine::drop_atom(float x, float y) {
         selected_template_idx_ >= static_cast<int>(templates_.size())) return;
     const auto& t = templates_[selected_template_idx_];
     const int idx = physics_.add_particle(x, y, t.radius);
-    auto& p = physics_.particles()[idx];
-    p.element_id        = static_cast<core::u8>(t.element_id);
-    p.template_id       = static_cast<core::u8>(selected_template_idx_);
-    p.mass              = t.mass;
-    p.enable_forces     = t.enable_forces;
-    p.enable_springs    = t.enable_springs;
-    p.enable_collisions = t.enable_collisions;
-    p.user_data         = t.user_data;
+    stamp_active_template_on_particle(idx);
+}
+
+void Engine::stamp_active_template_on_particle(int p_idx) {
+    if (selected_template_idx_ < 0 ||
+        selected_template_idx_ >= static_cast<int>(templates_.size())) return;
+    if (p_idx < 0 || p_idx >= static_cast<int>(physics_.particles().size())) return;
+    const auto& t = templates_[selected_template_idx_];
+    auto& p = physics_.particles()[p_idx];
+    p.element_id              = static_cast<core::u8>(t.element_id);
+    p.template_id             = static_cast<core::u8>(selected_template_idx_);
+    // Don't clobber mass/radius set by the builder — those are shape-specific
+    // and the user expects e.g. ball nodes to stay at ball_node_radius_, not
+    // get reset to the template's atom radius. Builders pass their own
+    // node_radius; only the atom/template-driven properties get stamped.
+    p.user_data               = t.user_data;
+    p.remember_severed_bonds  = t.remember_severed_bonds;
+    p.friction                = t.friction;
+}
+
+void Engine::stamp_active_template_on_indices(const std::vector<int>& indices) {
+    if (selected_template_idx_ < 0 ||
+        selected_template_idx_ >= static_cast<int>(templates_.size())) return;
+    for (int idx : indices) stamp_active_template_on_particle(idx);
+}
+
+void Engine::apply_active_spring_mode_to(const std::vector<int>& spring_indices) {
+    if (selected_template_idx_ < 0 ||
+        selected_template_idx_ >= static_cast<int>(templates_.size())) return;
+    if (templates_[selected_template_idx_].default_spring_mode !=
+        atoms::ParticleTemplate::SpringMode::Stiff) return;
+    auto& springs = physics_.springs();
+    for (int idx : spring_indices) {
+        if (idx >= 0 && idx < static_cast<int>(springs.size())) {
+            springs[idx].type = softbody::SpringType::Stiff;
+        }
+    }
 }
 
 void Engine::fire_rmb_action(float mx, float my) {
     switch (rmb_action_idx_) {
         case 0:
-            drop_ball(mx, my);
+            spawn_from_template(mx, my);
             break;
         case 1:
             physics_.add_static_disk(mx, my, obs_radius_);
@@ -773,27 +833,17 @@ void Engine::fire_rmb_action(float mx, float my) {
             physics_.add_drag_field(f);
             break;
         }
-        case 5: {
-            softbody::FlowEmitter e;
-            e.x = mx;
-            e.y = my;
-            e.per_frame = fp_emit_per_frame_;
-            e.vx_jitter = fp_emit_vx_jitter_;
-            e.vy_jitter = fp_emit_vy_jitter_;
-            flow_particles_.add_emitter(e);
-            break;
-        }
-        case 6:
+        case 5:
             rmb_spring_drag_active_ = true;
             rmb_spring_start_idx_ = pick_particle(mx, my);
             break;
-        case 7: {
+        case 6: {
             const int pidx = pick_particle(mx, my);
             if (pidx >= 0) physics_.remove_particle(pidx);
             if (dragged_particle_idx_ >= pidx) dragged_particle_idx_ = -1;
             break;
         }
-        case 8: {
+        case 7: {
             const int sidx = pick_spring(mx, my);
             if (sidx >= 0) {
                 auto& sps = physics_.springs();
@@ -801,10 +851,28 @@ void Engine::fire_rmb_action(float mx, float my) {
             }
             break;
         }
-        case 9:
-            drop_atom(mx, my);
-            break;
         default: break;
+    }
+}
+
+void Engine::spawn_from_template(float mx, float my) {
+    if (selected_template_idx_ < 0 ||
+        selected_template_idx_ >= static_cast<int>(templates_.size())) {
+        // Fallback: treat as a single atom drop with default template.
+        drop_atom(mx, my);
+        return;
+    }
+    const auto& t = templates_[selected_template_idx_];
+    using SP = atoms::ParticleTemplate::SpawnPattern;
+    switch (t.spawn_pattern) {
+        case SP::Single: drop_atom(mx, my); break;
+        case SP::Ball:   drop_ball(mx, my); break;
+        case SP::Grid:   drop_cloth(mx, my); break;
+        case SP::Rope:   drop_rope(mx, my); break;
+        case SP::Disc:   drop_disc(mx, my); break;
+        case SP::Star:   drop_star(mx, my); break;
+        case SP::Hex:    drop_hex(mx, my); break;
+        case SP::Blob:   drop_blob(mx, my); break;
     }
 }
 
@@ -867,7 +935,9 @@ void Engine::drop_disc(float x, float y) {
     spec.num_angular     = disc_num_angular_;
     spec.spring_damp_inc = disc_spring_damp_;
     spec.spring_damp_dec = disc_spring_damp_;
-    softbody::build_soft_disc(physics_, spec);
+    auto disc = softbody::build_soft_disc(physics_, spec);
+    stamp_active_template_on_indices(disc.particle_indices);
+    apply_active_spring_mode_to(disc.spring_indices);
 }
 
 void Engine::drop_hex(float x, float y) {
@@ -885,7 +955,9 @@ void Engine::drop_hex(float x, float y) {
     if (hex_pin_top_row_) {
         for (int c = 0; c < hex_nodes_x_; ++c) spec.pinned.push_back({c, 0});
     }
-    softbody::build_soft_hex_grid(physics_, spec);
+    auto hex = softbody::build_soft_hex_grid(physics_, spec);
+    stamp_active_template_on_indices(hex.particle_indices);
+    apply_active_spring_mode_to(hex.spring_indices);
 }
 
 void Engine::drop_cloth(float x, float y) {
@@ -907,7 +979,9 @@ void Engine::drop_cloth(float x, float y) {
         spec.pinned.push_back({0,                grid_nodes_y_ > 0 ? 0 : 0});
         spec.pinned.push_back({grid_nodes_x_ - 1, 0});
     }
-    softbody::build_soft_grid(physics_, spec);
+    auto grid = softbody::build_soft_grid(physics_, spec);
+    stamp_active_template_on_indices(grid.particle_indices);
+    apply_active_spring_mode_to(grid.spring_indices);
 }
 
 int Engine::pick_particle(float mx, float my) const {
@@ -1051,6 +1125,43 @@ void Engine::render_frame() {
             physics_.recompute_rest_lengths();
         }
         ImGui::TextDisabled("Recompute snaps every active spring's rest to its current length.");
+
+        ImGui::Separator();
+        ImGui::TextUnformatted("Rest impact (two-stage wake)");
+        slider_input_float("wake: spring-break impulse",
+                            &physics_.params.wake_spring_break_threshold, 0.0f, 4.0f, "%.3f");
+        slider_input_float("wake: mass multiplier",
+                            &physics_.params.wake_mass_multiplier,        0.0f, 8.0f, "%.3f");
+        ImGui::TextDisabled("Below break: absorb. Above break, below mass*mult: tear, stay asleep.");
+        ImGui::TextDisabled("Above mass*multiplier: tear AND wake. Heavier particles need more impulse.");
+
+        ImGui::Separator();
+        ImGui::TextUnformatted("Spring damage (flexible springs)");
+        ImGui::Checkbox("enable spring damage", &physics_.params.spring_damage_enabled);
+        if (physics_.params.spring_damage_enabled) {
+            slider_input_float("damage rate (per over-stretch tick)",
+                                &physics_.params.spring_damage_rate, 0.0f, 1.0f, "%.3f");
+            slider_input_float("permanent stretch rate",
+                                &physics_.params.spring_permanent_stretch_rate, 0.0f, 1.0f, "%.3f");
+            slider_input_float("strength loss rate",
+                                &physics_.params.spring_damage_strength_loss, 0.0f, 1.0f, "%.3f");
+        }
+        slider_input_float("stiff fracture stretch ratio",
+                            &physics_.params.stiff_fracture_stretch, 1.05f, 3.0f, "%.2f");
+        ImGui::TextDisabled("Damaged flexible springs fade toward white; Stiff springs fracture at ratio.");
+
+        ImGui::Separator();
+        ImGui::TextUnformatted("Body-rest propagation");
+        ImGui::Checkbox("propagate rest across connected bodies",
+                        &physics_.params.body_rest_propagation_enabled);
+        if (physics_.params.body_rest_propagation_enabled) {
+            slider_input_float("body rest fraction", &physics_.params.body_rest_fraction,
+                                0.1f, 1.0f, "%.2f");
+            slider_input_int  ("body recompute interval (ticks)",
+                                &physics_.params.body_recompute_interval_ticks, 1, 240);
+            ImGui::Text("bodies: %d   (fickle springs excluded from BFS)", physics_.body_count());
+        }
+
     }
 
     if (ImGui::CollapsingHeader("Interaction", kHeaderOpen)) {
@@ -1074,24 +1185,39 @@ void Engine::render_frame() {
         ImGui::Checkbox   ("color particles by body (palette)", &color_by_body_);
         ImGui::Checkbox   ("color particles by user_data (palette)", &color_by_user_data_);
         ImGui::Separator();
+        ImGui::TextUnformatted("View");
+        ImGui::Checkbox("show particles", &show_particles_);
+        ImGui::Checkbox("show springs",   &show_springs_);
+        slider_input_float("zoom", &view_zoom_, 0.25f, 16.0f, "%.2f");
+        if (ImGui::Button("reset view")) {
+            view_zoom_ = 1.0f;
+            request_view_reset_scroll_ = true;
+        }
+        ImGui::TextDisabled("Mouse wheel = zoom toward cursor. Middle-drag = pan.");
+        ImGui::Separator();
+        ImGui::TextUnformatted("Pixel grid (rasterized stamp under particles)");
+        ImGui::Checkbox("pixel grid enabled", &pixel_grid_enabled_);
+        if (pixel_grid_enabled_) {
+            slider_input_float("pixel cell size (world)", &pixel_grid_cell_size_, 2.0f, 64.0f, "%.1f");
+            slider_input_int  ("pixel grid alpha",        &pixel_grid_alpha_, 0, 255);
+        }
+        ImGui::Separator();
         ImGui::ColorEdit3("background color", background_color_);
     }
 
     if (ImGui::CollapsingHeader("RMB action (right-click on canvas)")) {
         const char* kRmbLabels[] = {
-            "0: drop ball",
+            "0: spawn (uses active template)",
             "1: drop static disk",
             "2: drag-to-place static line",
             "3: drop point gravity",
             "4: drop drag field",
-            "5: drop flow-particle emitter",
-            "6: drag-to-create spring",
-            "7: delete particle",
-            "8: delete spring",
-            "9: drop atom",
+            "5: drag-to-create spring",
+            "6: delete particle",
+            "7: delete spring",
         };
         ImGui::Combo("RMB does", &rmb_action_idx_, kRmbLabels, IM_ARRAYSIZE(kRmbLabels));
-        ImGui::TextDisabled("Tool parameters live in their respective Body/Force-generator sections.");
+        ImGui::TextDisabled("Spawn uses the active template's spawn_pattern (single / ball / grid / ...).");
         ImGui::Separator();
         ImGui::Checkbox("continuous (hold RMB to repeat)", &rmb_continuous_);
         if (rmb_continuous_) {
@@ -1130,12 +1256,14 @@ void Engine::render_frame() {
         }
     }
 
-    if (ImGui::CollapsingHeader("Cell rest (EKCHOUS layer 2)", ImGuiTreeNodeFlags_DefaultOpen)) {
-        ImGui::TextDisabled("Particle stops if its integer cell stays put for N ticks.");
-        ImGui::Checkbox("cell rest enabled", &physics_.params.cell_rest_enabled);
-        slider_input_int  ("rest threshold (ticks)", &physics_.params.rest_threshold_ticks, 1, 240);
-        slider_input_float("rest cell size (px)",    &physics_.params.rest_cell_size,       2.0f, 64.0f, "%.1f");
-        // Live count of at-rest particles.
+    if (ImGui::CollapsingHeader("Velocity rest", ImGuiTreeNodeFlags_DefaultOpen)) {
+        ImGui::TextDisabled("Locks when per-tick velocity stays below threshold for N ticks.");
+        ImGui::TextDisabled("Sustain counter keeps a bouncing ball from freezing at its apex.");
+        ImGui::Checkbox("rest enabled", &physics_.params.cell_rest_enabled);
+        slider_input_float("rest velocity threshold (px/tick)",
+                            &physics_.params.rest_velocity_threshold, 0.0f, 1.0f, "%.4f");
+        slider_input_int  ("sustain ticks below threshold",
+                            &physics_.params.rest_sustain_ticks, 1, 60);
         std::size_t rest_count = 0;
         for (const auto& p : physics_.particles()) if (p.at_rest) ++rest_count;
         ImGui::Text("at rest: %zu / %zu", rest_count, physics_.particles().size());
@@ -1214,15 +1342,26 @@ void Engine::render_frame() {
                                 el_ref.valence, el_ref.bond_radius, el_ref.bond_strength);
 
             ImGui::Separator();
-            ImGui::TextUnformatted("Color override");
-            ImGui::Checkbox("use color override", &t.use_color_override);
-            if (t.use_color_override) {
-                float col[3] = { t.color_override_r, t.color_override_g, t.color_override_b };
-                if (ImGui::ColorEdit3("render color", col)) {
-                    t.color_override_r = col[0];
-                    t.color_override_g = col[1];
-                    t.color_override_b = col[2];
+            {
+                const char* kSpawnLabels[] = {
+                    "Single (atom)", "Ball", "Grid (cloth)", "Rope",
+                    "Disc", "Star", "Hex grid", "Blob (Poisson)",
+                };
+                int sp = static_cast<int>(t.spawn_pattern);
+                if (ImGui::Combo("spawn pattern", &sp, kSpawnLabels, IM_ARRAYSIZE(kSpawnLabels))) {
+                    t.spawn_pattern = static_cast<atoms::ParticleTemplate::SpawnPattern>(sp);
                 }
+                ImGui::TextDisabled("RMB \"spawn\" action uses this. Shape params live in the Bodies panel.");
+            }
+
+            ImGui::Separator();
+            {
+                const char* kSpringModes[] = { "Flexible", "Stiff (rigid)" };
+                int sm = static_cast<int>(t.default_spring_mode);
+                if (ImGui::Combo("default spring mode", &sm, kSpringModes, IM_ARRAYSIZE(kSpringModes))) {
+                    t.default_spring_mode = static_cast<atoms::ParticleTemplate::SpringMode>(sm);
+                }
+                ImGui::TextDisabled("Flexible: position-correction springs that can damage. Stiff: rigid-body group.");
             }
 
             ImGui::Separator();
@@ -1931,6 +2070,7 @@ void Engine::render_frame() {
                 p.enable_springs    = t.enable_springs;
                 p.enable_collisions = t.enable_collisions;
                 p.user_data         = t.user_data;
+                p.remember_severed_bonds = t.remember_severed_bonds;
                 p.set_radius(t.radius);
             }
         }
@@ -2009,9 +2149,65 @@ void Engine::render_frame() {
     }
 
     // ---- Canvas ----
-    ImGui::Begin("Canvas");
+    // NoScrollWithMouse: we want mouse wheel to ZOOM, not scroll the window.
+    // The window's scrollbars + middle-drag still pan the view.
+    ImGui::Begin("Canvas", nullptr, ImGuiWindowFlags_NoScrollWithMouse);
+    if (request_view_reset_scroll_) {
+        ImGui::SetScrollX(0.0f);
+        ImGui::SetScrollY(0.0f);
+        request_view_reset_scroll_ = false;
+    }
+
+    // Top-right toolbar with quick view controls — mirrors the HUD toggles
+    // so the user can drive the view without leaving the canvas window.
+    {
+        const float btn_w = ImGui::GetFrameHeight() * 1.6f;
+        const float spacing = ImGui::GetStyle().ItemSpacing.x;
+        const int n_btns = 6;
+        const float bar_w = btn_w * n_btns + spacing * (n_btns - 1);
+        const float avail = ImGui::GetContentRegionAvail().x;
+        if (avail > bar_w) {
+            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (avail - bar_w));
+        }
+        if (ImGui::Button("-##zoomout", ImVec2(btn_w, 0))) view_zoom_ /= 1.15f;
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Zoom out");
+        ImGui::SameLine();
+        if (ImGui::Button("+##zoomin", ImVec2(btn_w, 0))) view_zoom_ *= 1.15f;
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Zoom in");
+        ImGui::SameLine();
+        if (ImGui::Button("R##reset", ImVec2(btn_w, 0))) {
+            view_zoom_ = 1.0f;
+            request_view_reset_scroll_ = true;
+        }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Reset view");
+        ImGui::SameLine();
+        ImVec4 col_active(0.30f, 0.55f, 0.85f, 1.0f);
+        auto toggle = [&](const char* label, const char* id, bool* state, const char* tip) {
+            if (*state) ImGui::PushStyleColor(ImGuiCol_Button, col_active);
+            const std::string full = std::string(label) + id;
+            if (ImGui::Button(full.c_str(), ImVec2(btn_w, 0))) *state = !*state;
+            if (*state) ImGui::PopStyleColor();
+            if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", tip);
+            ImGui::SameLine();
+        };
+        toggle("P", "##sp", &show_particles_,    "Toggle particles");
+        toggle("S", "##ss", &show_springs_,      "Toggle springs");
+        toggle("G", "##sg", &pixel_grid_enabled_,"Toggle pixel grid");
+        ImGui::NewLine();
+        ImGui::Separator();
+    }
+
+    // The canvas widget grows with zoom so the whole simulation is visible
+    // when zoomed in. When the widget exceeds the window the user can scroll
+    // via the scrollbars or middle-mouse drag.
+    if (view_zoom_ < 0.25f) view_zoom_ = 0.25f;
+    if (view_zoom_ > 16.0f) view_zoom_ = 16.0f;
+    const float zoom_ = view_zoom_;
+    const float widget_w = canvas_w_ * zoom_;
+    const float widget_h = canvas_h_ * zoom_;
+
     const ImVec2 canvas_origin = ImGui::GetCursorScreenPos();
-    ImGui::InvisibleButton("##canvas", ImVec2(canvas_w_, canvas_h_),
+    ImGui::InvisibleButton("##canvas", ImVec2(widget_w, widget_h),
                            ImGuiButtonFlags_MouseButtonLeft |
                            ImGuiButtonFlags_MouseButtonRight);
     const bool canvas_hovered = ImGui::IsItemHovered();
@@ -2019,14 +2215,41 @@ void Engine::render_frame() {
     const bool rmb_clicked    = ImGui::IsMouseClicked(ImGuiMouseButton_Right) && canvas_hovered;
 
     const ImVec2 mp = ImGui::GetMousePos();
-    const float mx_canvas = mp.x - canvas_origin.x;
-    const float my_canvas = mp.y - canvas_origin.y;
+    const float ms_x = mp.x - canvas_origin.x;   // cursor in widget local coords (post-scroll)
+    const float ms_y = mp.y - canvas_origin.y;
+    if (canvas_hovered) {
+        const float wheel = ImGui::GetIO().MouseWheel;
+        if (wheel != 0.0f) {
+            const float old_zoom = view_zoom_;
+            const float factor   = wheel > 0 ? 1.15f : 1.0f / 1.15f;
+            float new_zoom = old_zoom * factor;
+            if (new_zoom < 0.25f) new_zoom = 0.25f;
+            if (new_zoom > 16.0f) new_zoom = 16.0f;
+            // Adjust scroll so the world point under the cursor stays put:
+            // new_scroll = old_scroll + ms * (new_zoom / old_zoom - 1).
+            const float ratio = new_zoom / old_zoom - 1.0f;
+            ImGui::SetScrollX(ImGui::GetScrollX() + ms_x * ratio);
+            ImGui::SetScrollY(ImGui::GetScrollY() + ms_y * ratio);
+            view_zoom_  = new_zoom;
+        }
+        if (ImGui::IsMouseDragging(ImGuiMouseButton_Middle, 0.0f)) {
+            const ImVec2 d = ImGui::GetMouseDragDelta(ImGuiMouseButton_Middle, 0.0f);
+            ImGui::SetScrollX(ImGui::GetScrollX() - d.x);
+            ImGui::SetScrollY(ImGui::GetScrollY() - d.y);
+            ImGui::ResetMouseDragDelta(ImGuiMouseButton_Middle);
+        }
+    }
+    auto WS = [&](float wx, float wy) -> ImVec2 {
+        return ImVec2(canvas_origin.x + wx * zoom_,
+                       canvas_origin.y + wy * zoom_);
+    };
+    auto WSC = [&](float v) { return v * zoom_; };  // scale a size
 
-    // Right-click action depends on the selected RMB tool. Line mode is
-    // drag-to-place (capture start, draw preview, commit on release); the
-    // rest are point actions on click.
-    const bool rmb_in_canvas = mx_canvas >= 0 && mx_canvas <= canvas_w_ &&
-                               my_canvas >= 0 && my_canvas <= canvas_h_;
+    // Mouse coords in WORLD space (un-project through view).
+    const float mx_canvas = ms_x / zoom_;
+    const float my_canvas = ms_y / zoom_;
+
+    const bool rmb_in_canvas = canvas_hovered;
     const bool rmb_held      = ImGui::IsMouseDown(ImGuiMouseButton_Right);
     const bool rmb_released  = ImGui::IsMouseReleased(ImGuiMouseButton_Right);
     // Shift+RMB-press starts a drag-box selection regardless of the
@@ -2044,7 +2267,7 @@ void Engine::render_frame() {
     // Continuous emit while RMB is held. Skipped for drag-mode actions
     // (line idx 2, spring idx 6) which have inherent start/end semantics.
     {
-        const bool drag_action = (rmb_action_idx_ == 2) || (rmb_action_idx_ == 6);
+        const bool drag_action = (rmb_action_idx_ == 2) || (rmb_action_idx_ == 5);
         if (rmb_continuous_ && rmb_held && rmb_in_canvas && !sel_drag_active_ &&
             !drag_action && rmb_rate_hz_ > 0.0f) {
             rmb_accum_time_ += ImGui::GetIO().DeltaTime;
@@ -2082,8 +2305,15 @@ void Engine::render_frame() {
         const int end_idx = pick_particle(mx_canvas, my_canvas);
         if (rmb_spring_start_idx_ >= 0 && end_idx >= 0 &&
             rmb_spring_start_idx_ != end_idx) {
-            physics_.add_spring(rmb_spring_start_idx_, end_idx,
-                                 softbody::SpringType::Struct);
+            // Type derives from the active template's default_spring_mode.
+            softbody::SpringType t = softbody::SpringType::Struct;
+            if (selected_template_idx_ >= 0 &&
+                selected_template_idx_ < static_cast<int>(templates_.size()) &&
+                templates_[selected_template_idx_].default_spring_mode ==
+                    atoms::ParticleTemplate::SpringMode::Stiff) {
+                t = softbody::SpringType::Stiff;
+            }
+            physics_.add_spring(rmb_spring_start_idx_, end_idx, t);
         }
         rmb_spring_drag_active_ = false;
         rmb_spring_start_idx_ = -1;
@@ -2186,14 +2416,16 @@ void Engine::render_frame() {
         hover_spring_idx_    = -1;
     }
 
-    // Draw canvas backdrop + bounds.
+    // Draw canvas backdrop + bounds. Backdrop fills the FULL widget rect
+    // (canvas_origin + widget_w × widget_h, which is the zoomed world size).
+    // PushClipRect bounds all subsequent canvas draws so zoomed content can't
+    // spill onto neighboring HUD windows.
     ImDrawList* dl = ImGui::GetWindowDrawList();
-    dl->AddRectFilled(canvas_origin,
-                      ImVec2(canvas_origin.x + canvas_w_, canvas_origin.y + canvas_h_),
-                      IM_COL32(20, 22, 32, 255));
-    dl->AddRect(canvas_origin,
-                ImVec2(canvas_origin.x + canvas_w_, canvas_origin.y + canvas_h_),
-                IM_COL32(80, 90, 110, 255));
+    const ImVec2 canvas_widget_max(canvas_origin.x + widget_w,
+                                    canvas_origin.y + widget_h);
+    dl->AddRectFilled(canvas_origin, canvas_widget_max, IM_COL32(20, 22, 32, 255));
+    dl->PushClipRect(canvas_origin, canvas_widget_max, true);
+    dl->AddRect(canvas_origin, canvas_widget_max, IM_COL32(80, 90, 110, 255));
 
     auto clamp_byte = [](int v) {
         if (v < 0) return 0;
@@ -2343,14 +2575,14 @@ void Engine::render_frame() {
                     const float cxw = (i - 0.5f) * cell_w;
                     const float cyw = (j - 0.5f) * cell_h;
                     dl->AddCircleFilled(
-                        ImVec2(canvas_origin.x + cxw, canvas_origin.y + cyw),
+                        WS(cxw, cyw),
                         cell_w * 1.5f, IM_COL32(r, g, b, a), 14);
                 } else {
                     const float x0 = (i - 1) * cell_w;
                     const float y0 = (j - 1) * cell_h;
                     dl->AddRectFilled(
-                        ImVec2(canvas_origin.x + x0,            canvas_origin.y + y0),
-                        ImVec2(canvas_origin.x + x0 + cell_w,   canvas_origin.y + y0 + cell_h),
+                        WS(x0, y0),
+                        WS(x0 + cell_w, y0 + cell_h),
                         IM_COL32(r, g, b, a));
                 }
             }
@@ -2377,8 +2609,8 @@ void Engine::render_frame() {
                 const float x0 = (i - 1) * cell_w;
                 const float y0 = (j - 1) * cell_h;
                 dl->AddRectFilled(
-                    ImVec2(canvas_origin.x + x0,          canvas_origin.y + y0),
-                    ImVec2(canvas_origin.x + x0 + cell_w, canvas_origin.y + y0 + cell_h),
+                    WS(x0, y0),
+                    WS(x0 + cell_w, y0 + cell_h),
                     IM_COL32(r, g, b, a));
             }
         }
@@ -2395,8 +2627,8 @@ void Engine::render_frame() {
                 const int a = clamp_byte(static_cast<int>(stream_alpha_ * 220.0f * (1.0f - t)));
                 const ImU32 col = IM_COL32(220, 230, 255, a);
                 dl->AddLine(
-                    ImVec2(canvas_origin.x + line.xs[k],     canvas_origin.y + line.ys[k]),
-                    ImVec2(canvas_origin.x + line.xs[k + 1], canvas_origin.y + line.ys[k + 1]),
+                    WS(line.xs[k], line.ys[k]),
+                    WS(line.xs[k + 1], line.ys[k + 1]),
                     col, 1.0f);
             }
         }
@@ -2426,11 +2658,101 @@ void Engine::render_frame() {
                 const int r = std::min(255, static_cast<int>(mag * 200.0f));
                 const int g = std::min(255, static_cast<int>(80.0f + mag * 80.0f));
                 const ImU32 col = IM_COL32(r, g, 60, 200);
-                dl->AddLine(ImVec2(canvas_origin.x + cxw, canvas_origin.y + cyw),
-                            ImVec2(canvas_origin.x + ex,  canvas_origin.y + ey),
+                dl->AddLine(WS(cxw, cyw),
+                            WS(ex, ey),
                             col, 1.0f);
-                dl->AddCircleFilled(ImVec2(canvas_origin.x + ex, canvas_origin.y + ey),
+                dl->AddCircleFilled(WS(ex, ey),
                                     1.5f, col, 6);
+            }
+        }
+    }
+
+    const auto& parts = physics_.particles();
+    const auto& sprs  = physics_.springs();
+
+    // Pixel-grid stamp: rasterize particles into a coarse grid. Each cell
+    // takes the last particle whose center landed in it this tick. Cells
+    // owned by a quadrant-color template render as a 2×2 sub-grid using the
+    // template palette, so the floor mirrors the particle pie render.
+    if (pixel_grid_enabled_ && pixel_grid_cell_size_ > 0.5f) {
+        const int nx = std::max(1, static_cast<int>(std::ceil(canvas_w_ / pixel_grid_cell_size_)));
+        const int ny = std::max(1, static_cast<int>(std::ceil(canvas_h_ / pixel_grid_cell_size_)));
+        pixel_grid_nx_ = nx;
+        pixel_grid_ny_ = ny;
+        const std::size_t cell_count = static_cast<std::size_t>(nx) * ny;
+        pixel_grid_colors_.assign(cell_count, 0u);
+        constexpr core::u16 kNoTplOwner = 0xFFFFu;
+        pixel_grid_template_.assign(cell_count, kNoTplOwner);
+        const float inv_cs = 1.0f / pixel_grid_cell_size_;
+        const int a = pixel_grid_alpha_;
+        for (std::size_t i = 0; i < parts.size(); ++i) {
+            const auto& p = parts[i];
+            const int gx = static_cast<int>(p.cx * inv_cs);
+            const int gy = static_cast<int>(p.cy * inv_cs);
+            if (gx < 0 || gx >= nx || gy < 0 || gy >= ny) continue;
+            const std::size_t cell_i = static_cast<std::size_t>(gy) * nx + gx;
+            const std::size_t tid = p.template_id;
+            const bool tpl_ok = tid < templates_.size();
+            const auto t_mode = tpl_ok ? templates_[tid].color_mode
+                                       : atoms::ParticleTemplate::ColorMode::ElementDefault;
+            const bool quadrant_owner =
+                p.enable_forces && tpl_ok &&
+                t_mode == atoms::ParticleTemplate::ColorMode::Quadrant;
+            ImU32 col;
+            if (!p.enable_forces) {
+                col = IM_COL32(120, 120, 130, a);
+            } else if (tpl_ok && t_mode == atoms::ParticleTemplate::ColorMode::Single) {
+                const auto& t = templates_[tid];
+                col = IM_COL32(clamp_byte(static_cast<int>(t.single_color[0] * 255.0f)),
+                                clamp_byte(static_cast<int>(t.single_color[1] * 255.0f)),
+                                clamp_byte(static_cast<int>(t.single_color[2] * 255.0f)),
+                                a);
+            } else if (color_by_user_data_) {
+                ImU32 base = body_palette_color(static_cast<int>(p.user_data));
+                col = (base & 0x00FFFFFFu) | (static_cast<unsigned>(a) << 24);
+            } else if (color_by_body_) {
+                ImU32 base = body_palette_color(p.collision_group);
+                col = (base & 0x00FFFFFFu) | (static_cast<unsigned>(a) << 24);
+            } else {
+                // ElementDefault (or no template): use the element palette.
+                const auto& el = atoms::element(p.element_id);
+                col = IM_COL32(el.r, el.g, el.b, a);
+            }
+            pixel_grid_colors_[cell_i] = col;
+            if (quadrant_owner) {
+                pixel_grid_template_[cell_i] = static_cast<core::u16>(tid);
+            }
+        }
+        const float cs = pixel_grid_cell_size_;
+        const float half = cs * 0.5f;
+        for (int gy = 0; gy < ny; ++gy) {
+            for (int gx = 0; gx < nx; ++gx) {
+                const std::size_t cell_i = static_cast<std::size_t>(gy) * nx + gx;
+                const ImU32 c = pixel_grid_colors_[cell_i];
+                if (c == 0) continue;
+                const float x0 = gx * cs;
+                const float y0 = gy * cs;
+                const core::u16 tpl = pixel_grid_template_[cell_i];
+                if (tpl != kNoTplOwner && tpl < templates_.size()) {
+                    // 2x2 sub-grid using the template's 4 quadrant colors.
+                    // Ordering mirrors the particle pie:
+                    //   q0 = right(top-right cell), q1 = bottom(bottom-right),
+                    //   q2 = left(bottom-left),    q3 = top(top-left).
+                    const auto& q = templates_[tpl].quadrant_colors;
+                    auto qcol = [&](int qi) {
+                        return IM_COL32(
+                            clamp_byte(static_cast<int>(q[qi][0] * 255.0f)),
+                            clamp_byte(static_cast<int>(q[qi][1] * 255.0f)),
+                            clamp_byte(static_cast<int>(q[qi][2] * 255.0f)),
+                            a);
+                    };
+                    dl->AddRectFilled(WS(x0 + half, y0),         WS(x0 + cs,   y0 + half), qcol(3));  // top-right ← q3 (top)
+                    dl->AddRectFilled(WS(x0 + half, y0 + half),  WS(x0 + cs,   y0 + cs),   qcol(0));  // bottom-right ← q0 (right)
+                    dl->AddRectFilled(WS(x0,        y0 + half),  WS(x0 + half, y0 + cs),   qcol(1));  // bottom-left ← q1 (bottom)
+                    dl->AddRectFilled(WS(x0,        y0),         WS(x0 + half, y0 + half), qcol(2));  // top-left ← q2 (left)
+                } else {
+                    dl->AddRectFilled(WS(x0, y0), WS(x0 + cs, y0 + cs), c);
+                }
             }
         }
     }
@@ -2438,28 +2760,43 @@ void Engine::render_frame() {
     // Draw springs as lines. When tension-shading is on, map |force| to a
     // red/green gradient (PixelFlow's DwSoftBody2D.shade_springs_by_tension
     // does the same: r = force*10000, g = force*1000).
-    const auto& parts = physics_.particles();
-    const auto& sprs  = physics_.springs();
-    for (const auto& s : sprs) {
+    if (show_springs_) for (const auto& s : sprs) {
         const auto& pa = parts[s.a_idx];
         const auto& pb = parts[s.b_idx];
         ImU32 col;
+        float thickness = 1.0f;
         if (!s.enabled) {
-            // Torn spring — kept in the data for inspection but render dim.
             col = IM_COL32(80, 30, 30, 80);
         } else if (shade_springs_by_tension_) {
             const float tension = s.force < 0 ? -s.force : s.force;
             const int r = clamp_byte(static_cast<int>(tension * 10000.0f));
             const int g = clamp_byte(static_cast<int>(tension * 1000.0f));
             col = IM_COL32(r, g, 0, 220);
+        } else if (s.type == softbody::SpringType::Stiff) {
+            // Rigid-body spring — solid heavy line, no flex.
+            col = IM_COL32(220, 200, 160, 240);
+            thickness = 1.5f;
+        } else if (s.type == softbody::SpringType::Bend) {
+            col = IM_COL32(70, 90, 130, 140);
         } else {
-            col = (s.type == softbody::SpringType::Bend)
-                ? IM_COL32(70, 90, 130, 140)
-                : IM_COL32(150, 170, 200, 220);
+            col = IM_COL32(150, 170, 200, 220);
         }
-        dl->AddLine(ImVec2(canvas_origin.x + pa.cx, canvas_origin.y + pa.cy),
-                    ImVec2(canvas_origin.x + pb.cx, canvas_origin.y + pb.cy),
-                    col, 1.0f);
+        // Damage tint: fade the spring color toward white in proportion to
+        // accumulated stretch damage. A 50%-damaged spring is half-white;
+        // a 100%-damaged spring is white right before it auto-tears.
+        if (s.enabled && s.damage > 0.0f) {
+            int rch = (int)((col >> IM_COL32_R_SHIFT) & 0xFF);
+            int gch = (int)((col >> IM_COL32_G_SHIFT) & 0xFF);
+            int bch = (int)((col >> IM_COL32_B_SHIFT) & 0xFF);
+            const int ach = (int)((col >> IM_COL32_A_SHIFT) & 0xFF);
+            rch += static_cast<int>((255 - rch) * s.damage);
+            gch += static_cast<int>((255 - gch) * s.damage);
+            bch += static_cast<int>((255 - bch) * s.damage);
+            col = IM_COL32(rch, gch, bch, ach);
+        }
+        dl->AddLine(WS(pa.cx, pa.cy),
+                    WS(pb.cx, pb.cy),
+                    col, thickness);
     }
 
     // Draw flow-particle emitter icons (white crosshair + pulse ring) under
@@ -2468,13 +2805,13 @@ void Engine::render_frame() {
         if (!em.enabled) continue;
         const ImU32 col = IM_COL32(240, 240, 250, 200);
         const float k = 6.0f;
-        dl->AddLine(ImVec2(canvas_origin.x + em.x - k, canvas_origin.y + em.y),
-                    ImVec2(canvas_origin.x + em.x + k, canvas_origin.y + em.y),
+        dl->AddLine(WS(em.x - k, em.y),
+                    WS(em.x + k, em.y),
                     col, 1.5f);
-        dl->AddLine(ImVec2(canvas_origin.x + em.x, canvas_origin.y + em.y - k),
-                    ImVec2(canvas_origin.x + em.x, canvas_origin.y + em.y + k),
+        dl->AddLine(WS(em.x, em.y - k),
+                    WS(em.x, em.y + k),
                     col, 1.5f);
-        dl->AddCircle(ImVec2(canvas_origin.x + em.x, canvas_origin.y + em.y),
+        dl->AddCircle(WS(em.x, em.y),
                       3.0f, col, 12, 1.0f);
     }
 
@@ -2516,19 +2853,19 @@ void Engine::render_frame() {
                 const float t = static_cast<float>(k) / fp.trail_count;
                 const int ta = clamp_byte(static_cast<int>(fp.lifetime * t * 180.0f));
                 dl->AddLine(
-                    ImVec2(canvas_origin.x + fp.trail_xs[idx_a], canvas_origin.y + fp.trail_ys[idx_a]),
-                    ImVec2(canvas_origin.x + fp.trail_xs[idx_b], canvas_origin.y + fp.trail_ys[idx_b]),
+                    WS(fp.trail_xs[idx_a], fp.trail_ys[idx_a]),
+                    WS(fp.trail_xs[idx_b], fp.trail_ys[idx_b]),
                     IM_COL32(r, g, b, ta), 1.0f);
             }
             // Connect last trail point to current head position.
             const int last_idx = (fp.trail_head - 1 + softbody::FlowParticle::kTrailLen)
                                  % softbody::FlowParticle::kTrailLen;
             dl->AddLine(
-                ImVec2(canvas_origin.x + fp.trail_xs[last_idx], canvas_origin.y + fp.trail_ys[last_idx]),
-                ImVec2(canvas_origin.x + fp.x,                  canvas_origin.y + fp.y),
+                WS(fp.trail_xs[last_idx], fp.trail_ys[last_idx]),
+                WS(fp.x, fp.y),
                 IM_COL32(r, g, b, a), 1.0f);
         }
-        dl->AddCircleFilled(ImVec2(canvas_origin.x + fp.x, canvas_origin.y + fp.y),
+        dl->AddCircleFilled(WS(fp.x, fp.y),
                             1.5f, IM_COL32(r, g, b, a), 6);
     }
 
@@ -2552,8 +2889,8 @@ void Engine::render_frame() {
                 const float x0 = x * af_cs;
                 const float y0 = y * af_cs;
                 dl->AddRectFilled(
-                    ImVec2(canvas_origin.x + x0,         canvas_origin.y + y0),
-                    ImVec2(canvas_origin.x + x0 + af_cs, canvas_origin.y + y0 + af_cs),
+                    WS(x0, y0),
+                    WS(x0 + af_cs, y0 + af_cs),
                     col);
             }
         }
@@ -2573,31 +2910,31 @@ void Engine::render_frame() {
                 : IM_COL32(255, 130, 100, 200);
             if (pg.max_radius > 0.0f) {
                 dl->AddCircleFilled(
-                    ImVec2(canvas_origin.x + pg.cx, canvas_origin.y + pg.cy),
+                    WS(pg.cx, pg.cy),
                     pg.max_radius, fill, 36);
                 dl->AddCircle(
-                    ImVec2(canvas_origin.x + pg.cx, canvas_origin.y + pg.cy),
+                    WS(pg.cx, pg.cy),
                     pg.max_radius, ring, 36, 1.5f);
             }
             // Centre cross.
             const float k = 6.0f;
-            dl->AddLine(ImVec2(canvas_origin.x + pg.cx - k, canvas_origin.y + pg.cy),
-                        ImVec2(canvas_origin.x + pg.cx + k, canvas_origin.y + pg.cy),
+            dl->AddLine(WS(pg.cx - k, pg.cy),
+                        WS(pg.cx + k, pg.cy),
                         ring, 1.5f);
-            dl->AddLine(ImVec2(canvas_origin.x + pg.cx, canvas_origin.y + pg.cy - k),
-                        ImVec2(canvas_origin.x + pg.cx, canvas_origin.y + pg.cy + k),
+            dl->AddLine(WS(pg.cx, pg.cy - k),
+                        WS(pg.cx, pg.cy + k),
                         ring, 1.5f);
         }
         for (const auto& df : physics_.drag_fields()) {
             const ImU32 fill = IM_COL32(180, 180, 110, 35);
             const ImU32 edge = IM_COL32(220, 220, 140, 200);
             dl->AddRectFilled(
-                ImVec2(canvas_origin.x + df.aabb.min_x, canvas_origin.y + df.aabb.min_y),
-                ImVec2(canvas_origin.x + df.aabb.max_x, canvas_origin.y + df.aabb.max_y),
+                WS(df.aabb.min_x, df.aabb.min_y),
+                WS(df.aabb.max_x, df.aabb.max_y),
                 fill);
             dl->AddRect(
-                ImVec2(canvas_origin.x + df.aabb.min_x, canvas_origin.y + df.aabb.min_y),
-                ImVec2(canvas_origin.x + df.aabb.max_x, canvas_origin.y + df.aabb.max_y),
+                WS(df.aabb.min_x, df.aabb.min_y),
+                WS(df.aabb.max_x, df.aabb.max_y),
                 edge, 0.0f, 0, 1.2f);
         }
     }
@@ -2609,32 +2946,33 @@ void Engine::render_frame() {
         const ImU32 obs_edge = IM_COL32( 30,  30,  35, 220);
         for (const auto& d : physics_.static_disks()) {
             dl->AddCircleFilled(
-                ImVec2(canvas_origin.x + d.disk.cx, canvas_origin.y + d.disk.cy),
-                d.disk.radius, obs_fill, 28);
+                WS(d.disk.cx, d.disk.cy),
+                WSC(d.disk.radius), obs_fill, 28);
             dl->AddCircle(
-                ImVec2(canvas_origin.x + d.disk.cx, canvas_origin.y + d.disk.cy),
-                d.disk.radius, obs_edge, 28, 1.5f);
+                WS(d.disk.cx, d.disk.cy),
+                WSC(d.disk.radius), obs_edge, 28, 1.5f);
         }
         for (const auto& b : physics_.static_boxes()) {
             dl->AddRectFilled(
-                ImVec2(canvas_origin.x + b.aabb.min_x, canvas_origin.y + b.aabb.min_y),
-                ImVec2(canvas_origin.x + b.aabb.max_x, canvas_origin.y + b.aabb.max_y),
+                WS(b.aabb.min_x, b.aabb.min_y),
+                WS(b.aabb.max_x, b.aabb.max_y),
                 obs_fill);
             dl->AddRect(
-                ImVec2(canvas_origin.x + b.aabb.min_x, canvas_origin.y + b.aabb.min_y),
-                ImVec2(canvas_origin.x + b.aabb.max_x, canvas_origin.y + b.aabb.max_y),
+                WS(b.aabb.min_x, b.aabb.min_y),
+                WS(b.aabb.max_x, b.aabb.max_y),
                 obs_edge, 0.0f, 0, 1.5f);
         }
         for (const auto& l : physics_.static_lines()) {
             dl->AddLine(
-                ImVec2(canvas_origin.x + l.ax, canvas_origin.y + l.ay),
-                ImVec2(canvas_origin.x + l.bx, canvas_origin.y + l.by),
+                WS(l.ax, l.ay),
+                WS(l.bx, l.by),
                 obs_fill, l.thickness * 2.0f);
         }
     }
 
-    // Draw particles as filled circles.
-    for (std::size_t i = 0; i < parts.size(); ++i) {
+    // Draw particles as filled circles. Skipped entirely when show_particles_
+    // is off so the user can study only the spring graph / fluid / pixel grid.
+    if (show_particles_) for (std::size_t i = 0; i < parts.size(); ++i) {
         const auto& p = parts[i];
         ImU32 col;
         if (!p.enable_forces) {
@@ -2642,34 +2980,61 @@ void Engine::render_frame() {
             col = IM_COL32(120, 120, 130, 240);
         } else if (static_cast<int>(i) == dragged_particle_idx_) {
             col = IM_COL32(255, 240, 120, 255);
-        } else if (color_by_element_) {
-            const std::size_t tid = p.template_id;
-            if (tid < templates_.size() && templates_[tid].use_color_override) {
-                const auto& t = templates_[tid];
-                col = IM_COL32(clamp_byte(static_cast<int>(t.color_override_r * 255.0f)),
-                                clamp_byte(static_cast<int>(t.color_override_g * 255.0f)),
-                                clamp_byte(static_cast<int>(t.color_override_b * 255.0f)),
-                                255);
-            } else {
-                const auto& el = atoms::element(p.element_id);
-                col = IM_COL32(el.r, el.g, el.b, 255);
-            }
+        } else if (p.template_id < templates_.size() &&
+                   templates_[p.template_id].color_mode == atoms::ParticleTemplate::ColorMode::Single) {
+            const auto& t = templates_[p.template_id];
+            col = IM_COL32(clamp_byte(static_cast<int>(t.single_color[0] * 255.0f)),
+                            clamp_byte(static_cast<int>(t.single_color[1] * 255.0f)),
+                            clamp_byte(static_cast<int>(t.single_color[2] * 255.0f)),
+                            255);
         } else if (color_by_user_data_) {
             col = body_palette_color(static_cast<int>(p.user_data));
         } else if (color_by_body_) {
             col = body_palette_color(p.collision_group);
         } else {
-            col = particle_color(p.collision_count);
+            const auto& el = atoms::element(p.element_id);
+            col = IM_COL32(el.r, el.g, el.b, 255);
         }
-        dl->AddCircleFilled(ImVec2(canvas_origin.x + p.cx, canvas_origin.y + p.cy),
-                            p.rad, col, 12);
-        dl->AddCircle(ImVec2(canvas_origin.x + p.cx, canvas_origin.y + p.cy),
-                      p.rad, IM_COL32(15, 15, 20, 180), 12, 1.0f);
+        // Quadrant render: template color_mode == Quadrant overrides single-
+        // color circles with a 4-slice pie regardless of master toggles.
+        const std::size_t tid = p.template_id;
+        const bool use_quads =
+            tid < templates_.size() &&
+            templates_[tid].color_mode == atoms::ParticleTemplate::ColorMode::Quadrant &&
+            p.enable_forces &&
+            static_cast<int>(i) != dragged_particle_idx_;
+        if (use_quads) {
+            const auto& q = templates_[tid].quadrant_colors;
+            const ImVec2 center = WS(p.cx, p.cy);
+            const float r = WSC(p.rad);
+            constexpr float kPi = 3.14159265358979323846f;
+            for (int qi = 0; qi < 4; ++qi) {
+                ImVec2 verts[4];
+                verts[0] = center;
+                for (int k = 0; k < 3; ++k) {
+                    const float a = (qi + k * 0.5f) * (kPi / 2.0f);
+                    verts[k + 1] = ImVec2(center.x + r * std::cos(a),
+                                            center.y + r * std::sin(a));
+                }
+                const ImU32 qcol = IM_COL32(
+                    clamp_byte(static_cast<int>(q[qi][0] * 255.0f)),
+                    clamp_byte(static_cast<int>(q[qi][1] * 255.0f)),
+                    clamp_byte(static_cast<int>(q[qi][2] * 255.0f)),
+                    255);
+                dl->AddConvexPolyFilled(verts, 4, qcol);
+            }
+            dl->AddCircle(center, r, IM_COL32(15, 15, 20, 180), 12, 1.0f);
+        } else {
+            dl->AddCircleFilled(WS(p.cx, p.cy),
+                                 WSC(p.rad), col, 12);
+            dl->AddCircle(WS(p.cx, p.cy),
+                           WSC(p.rad), IM_COL32(15, 15, 20, 180), 12, 1.0f);
+        }
         // EKCHOUS layer 2: at-rest marker — small white dot at the centre.
         if (p.at_rest) {
             dl->AddCircleFilled(
-                ImVec2(canvas_origin.x + p.cx, canvas_origin.y + p.cy),
-                std::max(1.5f, p.rad * 0.35f),
+                WS(p.cx, p.cy),
+                std::max(1.5f, WSC(p.rad * 0.35f)),
                 IM_COL32(245, 245, 250, 230), 8);
         }
     }
@@ -2678,8 +3043,8 @@ void Engine::render_frame() {
     // RMB in line-place mode so they can see what they're about to commit.
     if (rmb_line_drag_active_) {
         dl->AddLine(
-            ImVec2(canvas_origin.x + rmb_line_start_x_, canvas_origin.y + rmb_line_start_y_),
-            ImVec2(canvas_origin.x + mx_canvas,         canvas_origin.y + my_canvas),
+            WS(rmb_line_start_x_, rmb_line_start_y_),
+            WS(mx_canvas, my_canvas),
             IM_COL32(140, 230, 140, 220), obs_line_thickness_ * 2.0f);
     }
 
@@ -2691,12 +3056,12 @@ void Engine::render_frame() {
         const float ymin = std::min(sel_start_y_, my_canvas);
         const float ymax = std::max(sel_start_y_, my_canvas);
         dl->AddRectFilled(
-            ImVec2(canvas_origin.x + xmin, canvas_origin.y + ymin),
-            ImVec2(canvas_origin.x + xmax, canvas_origin.y + ymax),
+            WS(xmin, ymin),
+            WS(xmax, ymax),
             IM_COL32(255, 220, 100, 32));
         dl->AddRect(
-            ImVec2(canvas_origin.x + xmin, canvas_origin.y + ymin),
-            ImVec2(canvas_origin.x + xmax, canvas_origin.y + ymax),
+            WS(xmin, ymin),
+            WS(xmax, ymax),
             IM_COL32(255, 220, 100, 220), 0.0f, 0, 1.5f);
     }
     if (!selected_particles_.empty()) {
@@ -2706,7 +3071,7 @@ void Engine::render_frame() {
             if (idx < 0 || idx >= n_parts) continue;
             const auto& p = sparts[idx];
             dl->AddCircle(
-                ImVec2(canvas_origin.x + p.cx, canvas_origin.y + p.cy),
+                WS(p.cx, p.cy),
                 p.rad + 3.0f, IM_COL32(255, 240, 120, 220), 16, 2.0f);
         }
     }
@@ -2717,7 +3082,7 @@ void Engine::render_frame() {
         const int hover_idx = pick_particle(mx_canvas, my_canvas);
         if (hover_idx >= 0 && hover_idx < static_cast<int>(physics_.particles().size())) {
             const auto& hp = physics_.particles()[hover_idx];
-            dl->AddCircle(ImVec2(canvas_origin.x + hp.cx, canvas_origin.y + hp.cy),
+            dl->AddCircle(WS(hp.cx, hp.cy),
                           hp.rad + 4.0f, IM_COL32(255, 80, 80, 230), 16, 2.0f);
         }
     }
@@ -2730,8 +3095,8 @@ void Engine::render_frame() {
             const auto& s = physics_.springs()[sidx];
             const auto& pa = physics_.particles()[s.a_idx];
             const auto& pb = physics_.particles()[s.b_idx];
-            dl->AddLine(ImVec2(canvas_origin.x + pa.cx, canvas_origin.y + pa.cy),
-                        ImVec2(canvas_origin.x + pb.cx, canvas_origin.y + pb.cy),
+            dl->AddLine(WS(pa.cx, pa.cy),
+                        WS(pb.cx, pb.cy),
                         IM_COL32(255, 80, 80, 230), 2.5f);
         }
     }
@@ -2750,14 +3115,14 @@ void Engine::render_frame() {
             end_x = ep.cx;
             end_y = ep.cy;
             // Glow over the snap target.
-            dl->AddCircle(ImVec2(canvas_origin.x + ep.cx, canvas_origin.y + ep.cy),
+            dl->AddCircle(WS(ep.cx, ep.cy),
                           ep.rad + 4.0f, IM_COL32(255, 240, 120, 230), 16, 2.0f);
         }
         // Glow over the start particle.
-        dl->AddCircle(ImVec2(canvas_origin.x + sp.cx, canvas_origin.y + sp.cy),
+        dl->AddCircle(WS(sp.cx, sp.cy),
                       sp.rad + 4.0f, IM_COL32(255, 240, 120, 230), 16, 2.0f);
-        dl->AddLine(ImVec2(canvas_origin.x + sp.cx, canvas_origin.y + sp.cy),
-                    ImVec2(canvas_origin.x + end_x, canvas_origin.y + end_y),
+        dl->AddLine(WS(sp.cx, sp.cy),
+                    WS(end_x, end_y),
                     IM_COL32(255, 220, 100, 220), 1.5f);
     }
 
@@ -2765,8 +3130,8 @@ void Engine::render_frame() {
     // is holding Alt+LMB so the slice is visible.
     if (lmb_held && alt_held && prev_mouse_canvas_x_ >= 0.0f) {
         dl->AddLine(
-            ImVec2(canvas_origin.x + prev_mouse_canvas_x_, canvas_origin.y + prev_mouse_canvas_y_),
-            ImVec2(canvas_origin.x + mx_canvas,            canvas_origin.y + my_canvas),
+            WS(prev_mouse_canvas_x_, prev_mouse_canvas_y_),
+            WS(mx_canvas, my_canvas),
             IM_COL32(255, 80, 80, 220), 2.0f);
     }
 
@@ -2775,10 +3140,11 @@ void Engine::render_frame() {
         const ImU32 col = force_gun_attract_
             ? IM_COL32(120, 230, 255, 200)
             : IM_COL32(255, 150,  80, 200);
-        dl->AddCircle(ImVec2(canvas_origin.x + mx_canvas, canvas_origin.y + my_canvas),
-                      force_gun_radius_, col, 32, 2.0f);
+        dl->AddCircle(WS(mx_canvas, my_canvas),
+                      WSC(force_gun_radius_), col, 32, 2.0f);
     }
 
+    dl->PopClipRect();
     ImGui::End();
 
     ImGui::Render();

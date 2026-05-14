@@ -26,14 +26,29 @@ struct ParticleTemplate {
     bool        enable_collisions = true;
     core::u32   user_data         = 0;
 
-    // Per-template color override. When use_color_override is true, particle
-    // renderer uses color_override_{r,g,b} instead of the element's default
-    // color. Independent of element_id so you can have e.g. two iron
-    // templates render differently.
-    bool  use_color_override = false;
-    float color_override_r   = 1.0f;
-    float color_override_g   = 1.0f;
-    float color_override_b   = 1.0f;
+    // Spawn pattern — drives the unified RMB "spawn" tool. Single is the
+    // bare drop_atom behavior; the rest dispatch to a builder.
+    enum class SpawnPattern : int {
+        Single = 0, Ball = 1, Grid = 2, Rope = 3,
+        Disc = 4,   Star = 5, Hex  = 6, Blob = 7,
+    };
+    SpawnPattern spawn_pattern = SpawnPattern::Single;
+
+    // Default spring mode for builders + the drag-to-create-spring action.
+    // Stiff = rigid-body group; Flexible = position-correction (Struct).
+    enum class SpringMode : int { Flexible = 0, Stiff = 1 };
+    SpringMode default_spring_mode = SpringMode::Flexible;
+
+    // Unified per-template color controller. Each particle from this
+    // template renders in one of three modes:
+    //   ElementDefault: use atoms::element(element_id).{r,g,b}
+    //   Single:         flat color from single_color[3]
+    //   Quadrant:       4-quadrant pie from quadrant_colors[4][3]
+    // The single_color field replaces the old use_color_override+RGB triple;
+    // the quadrant_colors array survives below.
+    enum class ColorMode : int { ElementDefault = 0, Single = 1, Quadrant = 2 };
+    ColorMode color_mode    = ColorMode::ElementDefault;
+    float     single_color[3] = {0.85f, 0.85f, 0.90f};
 
     // ---- Linked tools ----
     // Linking a tool to a template makes every particle from this template
@@ -70,6 +85,28 @@ struct ParticleTemplate {
     int   fp_emit_per_tick      = 2;
     float fp_emit_vx_jitter     = 0.6f;
     float fp_emit_vy_jitter     = 0.6f;
+
+    // Friction — per-template granular friction coefficient. Replaces the
+    // old fickle-bond proxy. On collision, the relative velocity of the
+    // contacting pair is attenuated by (1 - average friction) so heavily
+    // frictioned particles brake sharply on contact. 0 = frictionless slide;
+    // 1 = full velocity kill on every contact. Sand-like piling emerges at
+    // friction ≈ 0.7-0.9.
+    float friction                  = 0.0f;
+
+    // 4-color quadrant palette. Used when color_mode == Quadrant. Drawn as
+    // a 4-slice pie on each particle AND replicated as a 2×2 sub-grid on
+    // each pixel-grid cell the particle occupies.
+    float quadrant_colors[4][3] = {
+        {1.0f, 0.6f, 0.6f},
+        {0.6f, 1.0f, 0.6f},
+        {0.6f, 0.6f, 1.0f},
+        {1.0f, 1.0f, 0.6f},
+    };
+
+    // Bond memory. Copied to each spawned particle's
+    // Particle::remember_severed_bonds.
+    bool  remember_severed_bonds = true;
 };
 
 } // namespace ekchous::atoms

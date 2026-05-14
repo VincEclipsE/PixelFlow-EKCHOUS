@@ -121,4 +121,9 @@ inline int try_auto_bonds(softbody::Physics& physics, float radius_scale = 1.0f)
     return formed;
 }
 
+// try_fickle_bonds was removed when fickle-spring proxy gave way to a
+// real per-particle friction coefficient. The proxy bond is gone; the
+// friction value lives on ParticleTemplate and is applied during the
+// collision response phase in Physics.
+
 } // namespace ekchous::atoms

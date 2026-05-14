@@ -67,6 +67,34 @@ struct Particle {
     core::u8  rest_ticks  = 0;
     bool      at_rest     = false;
 
+    // Connected-body identifier — assigned by Physics::recompute_bodies()
+    // via BFS over enabled non-Fickle springs. 0 = unassigned / lone particle.
+    // Real bodies start at 1. Used by the body-rest propagation pass.
+    core::u16 body_id = 0;
+
+    // Per-particle bond-memory toggle. When a spring connected to this
+    // particle tears, either keep it with enabled=false (true) or erase it
+    // outright (false). Permissive: if EITHER endpoint particle remembers,
+    // the spring stays. Stamped from ParticleTemplate at spawn time.
+    bool      remember_severed_bonds = true;
+
+    // Granular friction. Applied as relative-velocity dampening on contact
+    // (post-collision-response in Physics). 0 = frictionless. Stamped from
+    // template at spawn.
+    float     friction = 0.0f;
+
+    // Effective mass — recomputed each tick by Physics::aggregate_mass()
+    // from the spring graph. Heavier (more-bonded) particles need more
+    // impulse to wake out of at_rest.
+    float     effective_mass = 1.0f;
+
+    // Rigid-body group rest-pose offset relative to the spawn-time COM of
+    // the rigid group. Used by Physics::update_rigid_groups to reconstruct
+    // the rigid body's shape each tick. Only meaningful when the particle
+    // is connected to others via SpringType::Stiff.
+    float     rest_offset_x = 0.0f;
+    float     rest_offset_y = 0.0f;
+
     Particle() = default;
     Particle(int idx_, float x, float y, float radius)
         : idx(idx_),

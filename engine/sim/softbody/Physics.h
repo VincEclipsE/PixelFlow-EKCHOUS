@@ -59,14 +59,43 @@ struct PhysicsParams {
     // rest of the run. 0 disables tearing entirely.
     float spring_tear_threshold = 0.0f;
 
-    // EKCHOUS layer 2 — cell-residency rest. After integration, a particle
-    // whose integer cell (cx / rest_cell_size, cy / rest_cell_size) has
-    // stayed the same for rest_threshold_ticks consecutive ticks is marked
-    // at_rest and its implicit velocity is zeroed. External forces can
-    // still wake it (cell change → counter reset → at_rest cleared).
-    bool  cell_rest_enabled     = false;
-    int   rest_threshold_ticks  = 30;
-    float rest_cell_size        = 10.0f;
+    // Velocity-threshold rest. A particle whose per-tick velocity magnitude
+    // stays below rest_velocity_threshold for rest_sustain_ticks consecutive
+    // ticks is locked (px snapped to cx). The sustain counter prevents
+    // false locks at the apex of bounces where instantaneous velocity is
+    // momentarily zero. At-rest particles skip gravity / integration /
+    // spring movement / their own collision response.
+    bool  cell_rest_enabled         = false;   // misnomer kept for HUD label
+    float rest_velocity_threshold   = 0.05f;
+    int   rest_sustain_ticks        = 6;
+
+    // Body-rest propagation. When ≥ body_rest_fraction of a connected body's
+    // particles are at_rest, set the rest to at_rest. Bodies are identified
+    // by BFS over enabled springs every body_recompute_interval_ticks.
+    bool  body_rest_propagation_enabled  = false;
+    float body_rest_fraction             = 0.6f;
+    int   body_recompute_interval_ticks  = 30;
+
+    // Two-stage impact handling on at_rest particles.
+    //   |impulse| < wake_spring_break_threshold : absorb, stay asleep
+    //   < wake_mass_multiplier * effective_mass : tear springs, stay asleep
+    //   ≥                                       : tear springs AND wake
+    // Replacing the global wake threshold with effective_mass × multiplier
+    // means heavier (more-bonded) particles need more impulse to wake.
+    float wake_spring_break_threshold    = 0.4f;
+    float wake_mass_multiplier           = 1.0f;
+
+    // Spring damage knobs (flexible springs only — Stiff springs fracture
+    // by stretch ratio, see stiff_fracture_stretch). damage = 0..1 per
+    // spring; 1.0 triggers auto-tear.
+    bool  spring_damage_enabled            = false;
+    float spring_damage_rate               = 0.02f;   // damage += rate*(stretch-1) per tick
+    float spring_permanent_stretch_rate    = 0.10f;   // rest *= 1 + rate*(stretch-1)
+    float spring_damage_strength_loss      = 0.05f;   // damp_* scaled per tick
+
+    // Stiff spring fracture threshold (stretch ratio above which a Stiff
+    // spring breaks, e.g. 1.3 = 30% over rest). Doesn't affect Flexible.
+    float stiff_fracture_stretch           = 1.30f;
 };
 
 class Physics {
@@ -152,6 +181,44 @@ public:
             springs_.end());
     }
 
+    // Tear a spring honoring per-particle bond-memory. If neither endpoint
+    // wants memory, marks the spring with the "really erase" sentinel; the
+    // end-of-tick purge in update() drops sentinel-flagged springs.
+    void tear_spring(Spring& s);
+
+    // Walk springs once, tear every enabled one touching p_idx.
+    void tear_springs_attached_to(int p_idx);
+
+    // BFS over enabled springs (all types — Fickle is gone). Assigns rising
+    // body_id (1, 2, …) to each connected component; lone particles get 0.
+    // Populates body_particle_count_ (indexed by body_id; index 0 reserved).
+    void recompute_bodies();
+
+    // Recompute Particle::effective_mass each tick from the spring graph.
+    // Stiff springs contribute the neighbor's mass fully; flexible springs
+    // contribute mass proportional to stretch ratio (more stretched →
+    // bigger drag from the neighbor → higher effective_mass).
+    void aggregate_effective_mass();
+
+    // Walk every active spring, compute stretch ratio. Flexible springs
+    // accumulate damage that shifts their render color toward white and
+    // permanently grows their rest length; auto-tears at damage = 1.0.
+    // Stiff springs fracture if stretch > params.stiff_fracture_stretch.
+    void update_spring_damage();
+
+    // Apply rigid-body constraints to every connected component that
+    // contains any SpringType::Stiff spring: compute COM + Procrustes
+    // orientation fit + snap each member to its rest pose offset rotated
+    // around the COM. Preserves the group's translational velocity by
+    // shifting px/py identically to cx/cy. Fresh groups snapshot rest
+    // offsets relative to their current COM the first time they're seen.
+    void update_rigid_groups();
+
+    int  body_count() const noexcept { return body_count_; }
+    const std::vector<int>& body_particle_counts() const noexcept {
+        return body_particle_count_;
+    }
+
     // Erase a particle. Springs touching it are removed; springs at higher
     // indices have their endpoint ids decremented so the remaining graph
     // stays valid. Returns true if the particle existed.
@@ -198,6 +265,12 @@ private:
     std::vector<PointGravity>  point_gravity_;
     std::vector<DragField>     drag_field_;
     PhaseTimings               last_timings_{};
+
+    // Body BFS scratch. body_particle_count_[0] is reserved (== 0); real
+    // body ids start at 1. body_count_ is the highest assigned id.
+    std::vector<int>           body_particle_count_;
+    int                        body_count_ = 0;
+    int                        body_recompute_countdown_ = 0;
 };
 
 } // namespace ekchous::softbody

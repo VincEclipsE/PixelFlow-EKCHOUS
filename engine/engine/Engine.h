@@ -83,6 +83,22 @@ private:
     // click and the continuous-hold tick can share one body.
     void fire_rmb_action(float mx, float my);
 
+    // Stamp the active template's per-particle config onto an existing
+    // particle (or a list of them). Used by builders so spawned particles
+    // carry the template's element_id / template_id / user_data / memory.
+    // Mass and radius stay at whatever the builder set (shape-specific).
+    void stamp_active_template_on_particle(int p_idx);
+    void stamp_active_template_on_indices(const std::vector<int>& indices);
+
+    // Unified spawn: switches on the active template's spawn_pattern and
+    // calls the matching builder (passing through template-stamping).
+    void spawn_from_template(float mx, float my);
+
+    // Re-type the listed springs to SpringType::Stiff when the active
+    // template's default_spring_mode is Stiff. Called by every drop_* after
+    // the builder finishes so a "Stiff" template produces rigid-body groups.
+    void apply_active_spring_mode_to(const std::vector<int>& spring_indices);
+
     // Template library I/O. Returns true on success.
     bool save_template_library();
     bool load_template_library();
@@ -140,6 +156,38 @@ private:
     // Canvas (world coords are 1:1 with canvas pixels).
     float canvas_w_ = 1024.0f;
     float canvas_h_ = 720.0f;
+
+    // View transform — applied at render time via the WS()/WSC() helpers in
+    // render_frame. The Canvas widget grows with zoom (so the simulation
+    // doesn't get cropped) and the Canvas ImGui window provides the natural
+    // scroll/pan; middle-mouse drag and mouse wheel are bridged into that
+    // scroll/zoom by render_frame.
+    float view_zoom_  = 1.0f;
+    // Set by HUD "reset view" button; consumed by render_frame to reset the
+    // Canvas window's scroll position to (0, 0) on the next frame.
+    bool  request_view_reset_scroll_ = false;
+
+    // Render-layer visibility toggles. Particles/springs default on; the
+    // "clean default" gives a sim that's visible but with no overlays.
+    bool  show_particles_ = true;
+    bool  show_springs_   = true;
+
+    // Pixel-grid stamp layer. When on, each tick rasterizes particles into
+    // a coarse grid below them: each cell takes the color of the nearest
+    // particle whose center falls inside it. Looks like a chunky pixel-art
+    // shadow of the simulation.
+    bool  pixel_grid_enabled_   = false;
+    float pixel_grid_cell_size_ = 8.0f;
+    int   pixel_grid_alpha_     = 200;   // 0..255
+    std::vector<core::u32> pixel_grid_colors_;
+    // Parallel array: template id that "owns" each cell when the owner uses
+    // quadrant colors. 0xFFFF = no quadrant owner; render as a single color
+    // from pixel_grid_colors_. Otherwise the cell renders as a 2×2 sub-grid
+    // pulled from templates_[id].quadrant_colors so the floor mirrors the
+    // particle's pie render.
+    std::vector<core::u16> pixel_grid_template_;
+    int                    pixel_grid_nx_ = 0;
+    int                    pixel_grid_ny_ = 0;
 
     // Mouse drag state.
     int   dragged_particle_idx_ = -1;
@@ -216,6 +264,9 @@ private:
     int   auto_bond_tick_counter_ = 0;
     float auto_bond_radius_scale_ = 1.0f;
     int   auto_bond_last_formed_  = 0;
+
+    // (Fickle bond pass removed — friction is now a per-particle property
+    //  applied during collision response. See Particle::friction.)
 
     // EKCHOUS layer 4 — atom radius stamp / data projection.
     atoms::AtomField atom_field_;
@@ -308,7 +359,7 @@ private:
 
     // Flow particles (field-advected dust).
     softbody::FlowParticleSystem flow_particles_;
-    bool  fp_auto_emit_        = true;
+    bool  fp_auto_emit_        = false;
     int   fp_emit_per_frame_   = 8;
     float fp_emit_vx_jitter_   = 0.6f;
     float fp_emit_vy_jitter_   = 0.6f;
