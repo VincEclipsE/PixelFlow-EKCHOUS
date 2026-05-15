@@ -184,6 +184,15 @@ public final class MainFrame extends JFrame {
         redoItem.addActionListener(e -> editor.redo());
         editMenu.add(redoItem);
 
+        editMenu.addMenuListener(new javax.swing.event.MenuListener() {
+            @Override public void menuSelected(javax.swing.event.MenuEvent e) {
+                undoItem.setEnabled(editor.canUndo());
+                redoItem.setEnabled(editor.canRedo());
+            }
+            @Override public void menuDeselected(javax.swing.event.MenuEvent e) {}
+            @Override public void menuCanceled(javax.swing.event.MenuEvent e) {}
+        });
+
         editMenu.addSeparator();
 
         JMenuItem duplicate = new JMenuItem("Duplicate Selected");

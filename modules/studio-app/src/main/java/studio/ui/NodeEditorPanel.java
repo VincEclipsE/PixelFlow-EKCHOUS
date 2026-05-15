@@ -804,8 +804,15 @@ public final class NodeEditorPanel extends JPanel {
                 from.getX() + dx, from.getY(),
                 to.getX() - dx, to.getY(),
                 to.getX(), to.getY());
-        g.setStroke(new BasicStroke(2f));
-        g.setColor(new Color(180, 200, 220, 200));
+        boolean connectedToSel =
+                selected != null && (e.from.owner == selected || e.to.owner == selected);
+        if (connectedToSel) {
+            g.setStroke(new BasicStroke(3.2f));
+            g.setColor(new Color(255, 196, 64, 220));
+        } else {
+            g.setStroke(new BasicStroke(2f));
+            g.setColor(new Color(180, 200, 220, 200));
+        }
         g.draw(curve);
     }
 
