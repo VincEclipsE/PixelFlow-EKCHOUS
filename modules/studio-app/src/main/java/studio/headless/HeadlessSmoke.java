@@ -135,6 +135,8 @@ public final class HeadlessSmoke {
                           studio.nodes.filter.BinomialBlurNode::new)
                 .register(studio.nodes.filter.LiquidFxNode.TYPE_ID,
                           studio.nodes.filter.LiquidFxNode::new)
+                .register(studio.nodes.image.OpticalFlowNode.TYPE_ID,
+                          studio.nodes.image.OpticalFlowNode::new)
                 // Anti-aliasing
                 .register(studio.nodes.aa.FxaaNode.TYPE_ID,
                           studio.nodes.aa.FxaaNode::new)

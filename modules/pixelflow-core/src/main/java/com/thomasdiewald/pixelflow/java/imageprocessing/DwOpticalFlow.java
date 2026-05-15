@@ -141,7 +141,7 @@ public class DwOpticalFlow {
   
   
   public void update(PGraphics2D tex_src) {
-    
+
     // .) swap frames, so frameCurr contains latest velocity data
     swapFrames();
 
@@ -154,8 +154,19 @@ public class DwOpticalFlow {
     } else {
       filter.copy.apply(tex_src, frameCurr.frame);
     }
-    
+
     // 2) run optical flow
+    computeOpticalFlow();
+  }
+
+  public void update(studio.engine.RenderTarget tex_src) {
+    swapFrames();
+    resize(tex_src.getWidth(), tex_src.getHeight());
+    if (param.grayscale) {
+      filter.luminance.apply(tex_src, frameCurr.frame);
+    } else {
+      filter.copy.apply(tex_src, frameCurr.frame);
+    }
     computeOpticalFlow();
   }
 
@@ -210,10 +221,13 @@ public class DwOpticalFlow {
   
 
   public void renderVelocityShading(PGraphics2D dst){
-    
+    throw new UnsupportedOperationException("PGraphics2D path is stubbed; use the RenderTarget overload");
+  }
+
+  public void renderVelocityShading(studio.engine.RenderTarget dst){
     int w = dst.getWidth();
     int h = dst.getHeight();
-    
+
     context.begin();
     context.beginDraw(dst);
     blendMode();

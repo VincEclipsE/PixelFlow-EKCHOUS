@@ -1,0 +1,50 @@
+{
+  "schema": "pflow/1",
+  "name": "Optical flow on fluid",
+  "output": {
+    "width": 800,
+    "height": 800,
+    "frames": 60,
+    "rootOutputNode": "n-screen"
+  },
+  "nodes": [
+    {
+      "id": "n-fluid",
+      "typeId": "pf.fluid.DwFluid2D",
+      "label": "fluid",
+      "layout": { "x": 40, "y": 160 },
+      "params": {
+        "width": 800,
+        "height": 800,
+        "grid_scale": 1,
+        "dissipation_velocity": 0.92,
+        "dissipation_density": 0.985,
+        "vorticity": 0.2,
+        "jacobi_iterations": 30,
+        "inject_color": [1.0, 0.5, 0.2, 1.0],
+        "inject_radius": 26.0,
+        "inject_pos": [400.0, 200.0],
+        "inject_velocity": [0.0, 90.0]
+      }
+    },
+    {
+      "id": "n-of",
+      "typeId": "pf.image.OpticalFlow",
+      "label": "optical flow",
+      "layout": { "x": 360, "y": 160 },
+      "params": { "blur_input": 8, "blur_flow": 4, "temporal_smooth": 0.5, "grayscale": true }
+    },
+    {
+      "id": "n-screen",
+      "typeId": "studio.builtin.GraphOutput",
+      "label": "output",
+      "layout": { "x": 660, "y": 160 }
+    }
+  ],
+  "edges": [
+    { "from": { "node": "n-fluid", "port": "density" },
+      "to":   { "node": "n-of",    "port": "src" } },
+    { "from": { "node": "n-of",    "port": "dst" },
+      "to":   { "node": "n-screen", "port": "in" } }
+  ]
+}
