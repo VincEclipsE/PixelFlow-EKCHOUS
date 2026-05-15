@@ -233,7 +233,7 @@ public final class MainFrame extends JFrame {
     private void saveProject() {
         if (model.currentPath() == null) { saveProjectAs(); return; }
         try {
-            model.save();
+            model.save(editor.exportLayout());
             setTitle("PixelFlow Studio — " + model.currentPath());
             statusBar.info("Saved " + model.currentPath().getFileName());
         } catch (IOException ex) {
@@ -260,7 +260,7 @@ public final class MainFrame extends JFrame {
             f = new File(f.getParentFile(), f.getName() + ".pflow");
         }
         try {
-            model.saveAs(f.toPath());
+            model.saveAs(f.toPath(), editor.exportLayout());
             setTitle("PixelFlow Studio — " + f.toPath());
             statusBar.info("Saved " + f.toPath().getFileName());
             recent.add(f.toPath());

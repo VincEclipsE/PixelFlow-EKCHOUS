@@ -4,10 +4,12 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.Map;
 
 import studio.graph.Edge;
 import studio.graph.Graph;
 import studio.graph.Node;
+import studio.graph.NodeId;
 import studio.graph.Parameter;
 
 /**
@@ -29,10 +31,19 @@ public final class PflowWriter {
      * preserve across save round-trips; pass null to use defaults.
      */
     public static void write(Path file, Graph graph, PflowJson template) throws IOException {
-        JsonCodec.write(file, build(graph, template));
+        JsonCodec.write(file, build(graph, template, null));
+    }
+
+    public static void write(Path file, Graph graph, PflowJson template,
+                             Map<NodeId, int[]> layouts) throws IOException {
+        JsonCodec.write(file, build(graph, template, layouts));
     }
 
     public static PflowJson build(Graph graph, PflowJson template) {
+        return build(graph, template, null);
+    }
+
+    public static PflowJson build(Graph graph, PflowJson template, Map<NodeId, int[]> layouts) {
         PflowJson out = new PflowJson();
         out.schema = template != null && template.schema != null ? template.schema : "pflow/1";
         out.name   = template != null ? template.name : null;
@@ -45,6 +56,10 @@ public final class PflowWriter {
             nj.typeId = n.typeId();
             nj.label = n.label();
             if (!n.isEnabled()) nj.enabled = Boolean.FALSE;
+            if (layouts != null) {
+                int[] pos = layouts.get(n.id());
+                if (pos != null) nj.layout = new PflowJson.Layout(pos[0], pos[1]);
+            }
             nj.params = new LinkedHashMap<>();
             for (Parameter<?> p : n.parameters()) {
                 Object v = paramValueForJson(p);

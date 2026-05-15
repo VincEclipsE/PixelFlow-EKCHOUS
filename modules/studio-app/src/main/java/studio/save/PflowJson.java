@@ -33,7 +33,17 @@ public final class PflowJson {
         public String label;
         /** Omit when true (enabled is the default). */
         public Boolean enabled;
+        /** Editor pixel coordinates in world space; null when not yet positioned. */
+        public Layout layout;
         public Map<String, Object> params = new LinkedHashMap<>();
+    }
+
+    public static final class Layout {
+        public Integer x;
+        public Integer y;
+
+        public Layout() {}
+        public Layout(int x, int y) { this.x = x; this.y = y; }
     }
 
     public static final class EdgeJson {

@@ -53,15 +53,23 @@ public final class StudioModel {
 
     /** Write the current graph back to its source path. */
     public void save() throws IOException {
+        save(null);
+    }
+
+    public void save(java.util.Map<studio.graph.NodeId, int[]> layouts) throws IOException {
         if (currentPath == null) throw new IOException("no project loaded; use Save As");
         if (current == null) throw new IOException("no graph loaded");
-        PflowWriter.write(currentPath, current.graph, current.source);
+        PflowWriter.write(currentPath, current.graph, current.source, layouts);
     }
 
     /** Write the current graph to a new path. The model adopts that path. */
     public void saveAs(Path path) throws IOException {
+        saveAs(path, null);
+    }
+
+    public void saveAs(Path path, java.util.Map<studio.graph.NodeId, int[]> layouts) throws IOException {
         if (current == null) throw new IOException("no graph loaded");
-        PflowWriter.write(path, current.graph, current.source);
+        PflowWriter.write(path, current.graph, current.source, layouts);
         currentPath = path;
     }
 }

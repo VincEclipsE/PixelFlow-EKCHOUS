@@ -117,7 +117,9 @@ public final class NodeEditorPanel extends JPanel {
                     layouts.remove(selected);
                     setSelection(null);
                     repaint();
-                } else if (code == KeyEvent.VK_M || code == KeyEvent.VK_D) {
+                } else if (e.isControlDown() && code == KeyEvent.VK_D) {
+                    duplicateSelected();
+                } else if (code == KeyEvent.VK_M) {
                     boolean wasOn = selected.isEnabled();
                     selected.setEnabled(!wasOn);
                     if (statusBar != null) {
@@ -163,7 +165,48 @@ public final class NodeEditorPanel extends JPanel {
         this.current = loaded;
         this.selected = null;
         autoLayout(loaded);
+        // Apply any saved per-node positions from the .pflow file
+        if (loaded.source != null && loaded.source.nodes != null) {
+            for (var nj : loaded.source.nodes) {
+                if (nj.layout == null || nj.layout.x == null || nj.layout.y == null) continue;
+                Node node = loaded.nodesById.get(nj.id);
+                if (node != null) layouts.put(node, new Layout(nj.layout.x, nj.layout.y));
+            }
+        }
         repaint();
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private void duplicateSelected() {
+        if (selected == null || current == null) return;
+        Node src = selected;
+        Node copy = registry.create(src.typeId());
+        // Copy label and enabled state
+        copy.setLabel(src.label() + " copy");
+        copy.setEnabled(src.isEnabled());
+        // Copy params by name
+        var srcParams = src.parameters();
+        for (int i = 0; i < srcParams.size(); i++) {
+            studio.graph.Parameter sp = srcParams.get(i);
+            studio.graph.Parameter cp = (studio.graph.Parameter) copy.parameter(sp.name);
+            if (cp != null) cp.set(sp.get());
+        }
+        current.graph.addNode(copy);
+        if (current.nodesById != null) current.nodesById.put(copy.id().value, copy);
+        Layout L = layoutOf(src);
+        layouts.put(copy, new Layout(L.x + 24, L.y + 24));
+        setSelection(copy);
+        if (statusBar != null) statusBar.info("Duplicated " + src.label());
+        repaint();
+    }
+
+    /** Read-only view of node→(x,y) so the writer can persist layout. */
+    public java.util.Map<studio.graph.NodeId, int[]> exportLayout() {
+        java.util.LinkedHashMap<studio.graph.NodeId, int[]> out = new java.util.LinkedHashMap<>();
+        for (var e : layouts.entrySet()) {
+            out.put(e.getKey().id(), new int[]{ e.getValue().x, e.getValue().y });
+        }
+        return out;
     }
 
     public void addSelectionListener(Consumer<Node> listener) { selectionListeners.add(listener); }
