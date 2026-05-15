@@ -17,7 +17,7 @@ import com.thomasdiewald.pixelflow.java.dwgl.DwGLRenderSettingsCallback;
 import com.thomasdiewald.pixelflow.java.dwgl.DwGLTexture;
 import com.thomasdiewald.pixelflow.java.utils.DwUtils;
 
-import processing.opengl.PGraphicsOpenGL;
+import studio.engine.RenderTarget;
 
 /**
  * @author Thomas Diewald<br>
@@ -159,7 +159,7 @@ public class Bloom {
    * @param dst_bloom
    * @param dst_composition
    */
-  public void apply(PGraphicsOpenGL src_luminance, PGraphicsOpenGL dst_bloom, PGraphicsOpenGL dst_composition){
+  public void apply(RenderTarget src_luminance, RenderTarget dst_bloom, RenderTarget dst_composition){
 
     // 1) create blur levels
     gaussianpyramid.apply(src_luminance, param.blur_radius);
@@ -197,7 +197,7 @@ public class Bloom {
     return tm;
   }
   
-  private void mergeBlurLayers(PGraphicsOpenGL dst){
+  private void mergeBlurLayers(RenderTarget dst){
     merge.apply(dst, alloc());
   }
   
@@ -211,7 +211,7 @@ public class Bloom {
    * applies the bloom directly on dst
    * @param dst
    */
-  public void apply(PGraphicsOpenGL dst){
+  public void apply(RenderTarget dst){
     apply(dst, null, dst);
   }
   

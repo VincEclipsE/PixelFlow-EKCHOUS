@@ -17,8 +17,7 @@ import com.thomasdiewald.pixelflow.java.DwPixelFlow;
 import com.thomasdiewald.pixelflow.java.dwgl.DwGLSLProgram;
 import com.thomasdiewald.pixelflow.java.dwgl.DwGLTexture;
 
-import processing.opengl.PGraphicsOpenGL;
-import processing.opengl.Texture;
+import studio.engine.RenderTarget;
 
 
 // Fast Summed-Area Table Generation and its Applications
@@ -91,12 +90,12 @@ public class SummedAreaTable{
     sat_dst.clear(0);
   }
 
-  public void create(PGraphicsOpenGL src){
-    Texture tex_src = src.getTexture();  if(!tex_src.available())  return;
+  public void create(RenderTarget src){
+    if(!src.isSampleable()) return;
     
-    int w = tex_src.glWidth;
-    int h = tex_src.glHeight;
-    int HANDLE_src = tex_src.glName;
+    int w = src.getWidth();
+    int h = src.getHeight();
+    int HANDLE_src = src.getGLTextureId();
     
     resize(w,h);
     
@@ -149,13 +148,13 @@ public class SummedAreaTable{
    * @param dst
    * @param radius
    */
-  public void apply(PGraphicsOpenGL dst, int radius){
-    Texture tex_dst = dst.getTexture(); if(!tex_dst.available())  return;
+  public void apply(RenderTarget dst, int radius){
+    if(!dst.isSampleable()) return;
     
     int w_sat = sat_src.w;
     int h_sat = sat_src.h;
-    int w_dst = tex_dst.glWidth;
-    int h_dst = tex_dst.glHeight;
+    int w_dst = dst.getWidth();
+    int h_dst = dst.getHeight();
 
     DwGLSLProgram shader = shader_blur;
     context.begin();

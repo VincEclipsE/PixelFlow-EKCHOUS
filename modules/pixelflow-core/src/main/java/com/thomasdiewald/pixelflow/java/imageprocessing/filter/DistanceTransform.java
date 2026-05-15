@@ -17,8 +17,7 @@ import com.thomasdiewald.pixelflow.java.dwgl.DwGLSLProgram;
 import com.thomasdiewald.pixelflow.java.dwgl.DwGLTexture;
 import com.thomasdiewald.pixelflow.java.utils.DwUtils;
 
-import processing.opengl.PGraphicsOpenGL;
-import processing.opengl.Texture;
+import studio.engine.RenderTarget;
 
 /**
  * 
@@ -94,9 +93,9 @@ public class DistanceTransform {
     
   }
   
-  public void create(PGraphicsOpenGL pg_mask){
-    Texture tex_mask = pg_mask.getTexture();  if(!tex_mask.available())  return;
-    create(tex_mask.glName, tex_mask.glWidth, tex_mask.glHeight);
+  public void create(RenderTarget pg_mask){
+    if(!pg_mask.isSampleable()) return;
+    create(mask.getGLTextureId(), mask.getWidth(), mask.getHeight());
   }
   
   public void create(DwGLTexture tex_mask){    
@@ -159,11 +158,11 @@ public class DistanceTransform {
   }
   
   
-  public void computeDistanceThreshold(PGraphicsOpenGL dst, float distance_threshold, float[] colA, float[] colB){
+  public void computeDistanceThreshold(RenderTarget dst, float distance_threshold, float[] colA, float[] colB){
     Texture tex_dst  = dst.getTexture();  if(!tex_dst .available())  return;
  
-    int w = dst.width;
-    int h = dst.height;
+    int w = dst.getWidth();
+    int h = dst.getHeight();
     
     context.begin();
     context.beginDraw(dst);
@@ -186,18 +185,18 @@ public class DistanceTransform {
    * @param src src color at nn-lookup position
    * @param dst
    */
-  public void apply(PGraphicsOpenGL src, PGraphicsOpenGL dst){
+  public void apply(RenderTarget src, RenderTarget dst){
     Texture tex_src = src.getTexture();  if(!tex_src .available()) return;
     Texture tex_dst = dst.getTexture();  if(!tex_dst .available()) return;
     
     if(src == dst){
       System.out.println("DistanceTransform.apply error: read-write race");
     }
-    int w_dst = dst.width;
-    int h_dst = dst.height;
+    int w_dst = dst.getWidth();
+    int h_dst = dst.getHeight();
     
-    int w_src = src.width;
-    int h_src = src.height;
+    int w_src = src.getWidth();
+    int h_src = src.getHeight();
     
     int w_dtnn = tex_dtnn.src.w;
     int h_dtnn = tex_dtnn.src.h;
@@ -209,7 +208,7 @@ public class DistanceTransform {
     shader_voronoi.uniform2f     ("wh_src_rcp" , 1f/w_src, 1f/h_src);
     shader_voronoi.uniform2f     ("wh_dtnn_rcp", 1f/w_dtnn, 1f/h_dtnn);
     shader_voronoi.uniform1f     ("dist_norm"  , param.voronoi_distance_normalization);
-    shader_voronoi.uniformTexture("tex_src"    , tex_src.glName);
+    shader_voronoi.uniformTexture("tex_src"    , src.getGLTextureId());
     shader_voronoi.uniformTexture("tex_dtnn"   , tex_dtnn.src);
     shader_voronoi.drawFullScreenQuad();
     shader_voronoi.end();

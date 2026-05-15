@@ -47,7 +47,7 @@ public class DwFilter {
   
   public DwFilter(DwPixelFlow context_){
     this.context = context_;
-    this.context.papplet.registerMethod("dispose", this);
+    this.context.registerDispose(this);
     
     copy                = new Copy               (context);
     merge               = new Merge              (context);

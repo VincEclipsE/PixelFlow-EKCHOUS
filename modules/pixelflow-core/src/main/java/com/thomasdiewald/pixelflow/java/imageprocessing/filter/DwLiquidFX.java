@@ -20,12 +20,12 @@ import com.thomasdiewald.pixelflow.java.imageprocessing.filter.DwFilter;
 import com.thomasdiewald.pixelflow.java.imageprocessing.filter.Sobel;
 import com.thomasdiewald.pixelflow.java.imageprocessing.filter.Merge.TexMad;
 
-import processing.opengl.PGraphicsOpenGL;
+import studio.engine.RenderTarget;
 
 /**
  * 
  * PostProcessing Effect for applying a liquid-like or plastic-like effect on 
- * an existing PGraphicsOpenGL canvas.<br>
+ * an existing RenderTarget canvas.<br>
  * <br>
  * The image must be a composition of a Foreground (opaque color) and 
  * a Background (transparent color).<br>
@@ -88,14 +88,14 @@ public class DwLiquidFX {
   protected float[] lo = {0,0,0,0}; // low clamp
   protected float[] hi = {5,5,5,5}; // high clamp
   
-  public void apply(PGraphicsOpenGL pg_particles){
+  public void apply(RenderTarget pg_particles){
     apply(pg_particles, pg_particles);
   }
   
   
-  public void apply(PGraphicsOpenGL pg_src, PGraphicsOpenGL pg_dst){
-    int w = pg_src.width;
-    int h = pg_src.height;
+  public void apply(RenderTarget pg_src, RenderTarget pg_dst){
+    int w = pg_src.getWidth();
+    int h = pg_src.getHeight();
 //    tex_particles.resize(context, GL2.GL_RGBA8, w, h, GL2.GL_RGBA, GL2.GL_UNSIGNED_BYTE, GL2.GL_LINEAR, 4, 1);
     tex_particles.resize(context, GL2.GL_RGBA16F, w, h, GL2.GL_RGBA, GL2.GL_FLOAT, GL2.GL_LINEAR, 4, 2);
 //    for(int i = 0; i < 50; i++){

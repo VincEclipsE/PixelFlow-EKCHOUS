@@ -45,7 +45,7 @@ public class DwHarrisCorner {
   
   public DwHarrisCorner(DwPixelFlow context){
     this.context = context;
-    context.papplet.registerMethod("dispose", this);
+    context.registerDispose(this);
     
     String path1 = DwPixelFlow.SHADER_DIR+"HarrisCornerDetection/";
     String path2 = DwPixelFlow.SHADER_DIR+"Filter/";
@@ -146,8 +146,8 @@ public class DwHarrisCorner {
   
   public void render(PGraphics2D dst){
 
-    int w = dst.width;
-    int h = dst.height;
+    int w = dst.getWidth();
+    int h = dst.getHeight();
     
     context.begin();
     context.beginDraw(dst);

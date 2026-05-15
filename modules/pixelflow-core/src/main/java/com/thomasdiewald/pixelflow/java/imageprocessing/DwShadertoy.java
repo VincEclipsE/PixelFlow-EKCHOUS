@@ -24,8 +24,7 @@ import com.thomasdiewald.pixelflow.java.dwgl.DwGLTexture3D;
 import com.thomasdiewald.pixelflow.java.dwgl.DwGLTextureCube;
 
 import processing.core.PGraphics;
-import processing.opengl.PGraphicsOpenGL;
-import processing.opengl.Texture;
+import studio.engine.RenderTarget;
 
 
 /**
@@ -65,7 +64,7 @@ public class DwShadertoy{
   
   public DwShadertoy(DwPixelFlow context, String shader_filename){
     this.context = context;
-    this.context.papplet.registerMethod("dispose", this);
+    this.context.registerDispose(this);
     createShader(shader_filename);
     resize(context.papplet.width, context.papplet.height);
   }
@@ -311,7 +310,7 @@ public class DwShadertoy{
    * @param channel
    * @param tex
    */
-  public void set_iChannel(int channel, PGraphicsOpenGL pg){
+  public void set_iChannel(int channel, RenderTarget pg){
     Texture tex2D = pg.getTexture(); 
     if(tex2D.available()){
       set_iChannel(channel, tex2D.glName, tex2D.glWidth, tex2D.glHeight, 1, "sampler2D");
@@ -417,7 +416,7 @@ public class DwShadertoy{
    * execute shader, using the given PGRaphics-rendertarget.
    * @param tex_dst
    */
-  public void apply(PGraphicsOpenGL pg_dst){
+  public void apply(RenderTarget pg_dst){
     resize(pg_dst.width, pg_dst.height);
     pg_dst.getTexture();
     context.begin();
@@ -433,7 +432,7 @@ public class DwShadertoy{
    */
   public void apply(PGraphics pg_dst){
     if(pg_dst.isGL()){
-      apply((PGraphicsOpenGL)pg_dst);
+      apply((RenderTarget)pg_dst);
     }
   }
   

@@ -62,7 +62,7 @@ public class DwOpticalFlow {
     shader_OF_renderVelocity        = context.createShader(DwPixelFlow.SHADER_DIR+"OpticalFlow/renderVelocityShading.frag");                                                               
     shader_OF_renderVelocityStreams = context.createShader(DwPixelFlow.SHADER_DIR+"OpticalFlow/renderVelocityStreams.vert", DwPixelFlow.SHADER_DIR+"OpticalFlow/renderVelocityStreams.frag");
     
-    context.papplet.registerMethod("dispose", this);
+    context.registerDispose(this);
   }
 
   public DwOpticalFlow(DwPixelFlow context, int w, int h){
@@ -75,7 +75,7 @@ public class DwOpticalFlow {
     shader_OF_renderVelocityStreams = context.createShader(DwPixelFlow.SHADER_DIR+"OpticalFlow/renderVelocityStreams.vert", DwPixelFlow.SHADER_DIR+"OpticalFlow/renderVelocityStreams.frag");
     
     resize(w, h);
-    context.papplet.registerMethod("dispose", this);
+    context.registerDispose(this);
   }
 
   public void dispose(){
@@ -211,8 +211,8 @@ public class DwOpticalFlow {
 
   public void renderVelocityShading(PGraphics2D dst){
     
-    int w = dst.width;
-    int h = dst.height;
+    int w = dst.getWidth();
+    int h = dst.getHeight();
     
     context.begin();
     context.beginDraw(dst);
@@ -233,8 +233,8 @@ public class DwOpticalFlow {
       return;
     }
 
-    int w = dst.width;
-    int h = dst.height;
+    int w = dst.getWidth();
+    int h = dst.getHeight();
     
     int   lines_x    = Math.round(w / spacing);
     int   lines_y    = Math.round(h / spacing);

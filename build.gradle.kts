@@ -31,6 +31,7 @@ subprojects {
         options.compilerArgs.addAll(listOf(
             "-Xlint:all,-serial,-processing",
             "-parameters",
+            "-Xmaxerrs", "9999",
         ))
     }
 

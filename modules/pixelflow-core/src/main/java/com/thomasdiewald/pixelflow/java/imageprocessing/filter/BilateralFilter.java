@@ -16,8 +16,7 @@ import com.thomasdiewald.pixelflow.java.DwPixelFlow;
 import com.thomasdiewald.pixelflow.java.dwgl.DwGLSLProgram;
 import com.thomasdiewald.pixelflow.java.dwgl.DwGLTexture;
 
-import processing.opengl.PGraphicsOpenGL;
-import processing.opengl.Texture;
+import studio.engine.RenderTarget;
 
 public class BilateralFilter {
   
@@ -31,21 +30,21 @@ public class BilateralFilter {
   public float   BILATERAL_SIGMA_COLOR = 0.3f;
   public float   BILATERAL_SIGMA_SPACE = 5;
   
-  public void apply(PGraphicsOpenGL src, PGraphicsOpenGL dst) {
+  public void apply(RenderTarget src, RenderTarget dst) {
     apply(src, dst, BILATERAL_RADIUS, BILATERAL_SIGMA_COLOR, BILATERAL_SIGMA_SPACE);
   }
 
-  public void apply(PGraphicsOpenGL src, PGraphicsOpenGL dst, int radius, float sigma_color, float sigma_space) {
+  public void apply(RenderTarget src, RenderTarget dst, int radius, float sigma_color, float sigma_space) {
     if(src == dst){
       System.out.println("BilateralFilter error: read-write race");
       return;
     }
-    Texture tex_src = src.getTexture(); if(!tex_src.available())  return;
-    Texture tex_dst = dst.getTexture(); if(!tex_dst.available())  return;
+    if(!src.isSampleable()) return;
+    if(!dst.isSampleable()) return;
 
     context.begin();
     context.beginDraw(dst);
-    apply(tex_src.glName, dst.width, dst.height, radius, sigma_color, sigma_space);
+    apply(src.getGLTextureId(), dst.getWidth(), dst.getHeight(), radius, sigma_color, sigma_space);
     context.endDraw();
     context.end("BilateralFilter.apply");
   }

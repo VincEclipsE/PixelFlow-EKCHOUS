@@ -13,8 +13,7 @@ package com.thomasdiewald.pixelflow.java.imageprocessing.filter;
 import com.thomasdiewald.pixelflow.java.DwPixelFlow;
 import com.thomasdiewald.pixelflow.java.imageprocessing.filter.Merge.TexMad;
 
-import processing.opengl.PGraphicsOpenGL;
-import processing.opengl.Texture;
+import studio.engine.RenderTarget;
 
 
 /**
@@ -41,8 +40,8 @@ public class DoG {
     this.context = context;
   }
   
-  public void apply(PGraphicsOpenGL src, PGraphicsOpenGL dst, PGraphicsOpenGL tmp) {
-    Texture tex_src = src.getTexture(); if(!tex_src.available())   return;
+  public void apply(RenderTarget src, RenderTarget dst, RenderTarget tmp) {
+    if(!src.isSampleable()) return;
     Texture tex_dst = dst.getTexture(); if(!tex_dst .available())  return;
     Texture tex_tmp = dst.getTexture(); if(!tex_tmp .available())  return;
     

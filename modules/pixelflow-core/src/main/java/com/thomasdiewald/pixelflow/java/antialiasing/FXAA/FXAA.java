@@ -17,8 +17,7 @@ import com.thomasdiewald.pixelflow.java.DwPixelFlow;
 import com.thomasdiewald.pixelflow.java.dwgl.DwGLSLProgram;
 import com.thomasdiewald.pixelflow.java.imageprocessing.filter.DwFilter;
 
-import processing.opengl.PGraphicsOpenGL;
-import processing.opengl.Texture;
+import studio.engine.RenderTarget;
 
 /**
  * 
@@ -86,24 +85,24 @@ public class FXAA {
   
 
   
-  public void apply(PGraphicsOpenGL src, PGraphicsOpenGL dst) {
+  public void apply(RenderTarget src, RenderTarget dst) {
     if(src == dst){
       System.out.println("FXAA error: read-write race");
       return;
     }
     
-    Texture tex_src = src.getTexture(); if(!tex_src.available())  return;
-    Texture tex_dst = dst.getTexture(); if(!tex_dst.available())  return;
+    if(!src.isSampleable()) return;
+    if(!dst.isSampleable()) return;
     
     // RGBL ... red, green, blue, luminance, for FXAA
     DwFilter.get(context).rgbl.apply(src, src);
        
     context.begin();
-    setLinearTextureFiltering(tex_src.glName);
+    setLinearTextureFiltering(src.getGLTextureId());
     context.beginDraw(dst);
-    apply(tex_src.glName, dst.width, dst.height);
+    apply(src.getGLTextureId(), dst.getWidth(), dst.getHeight());
     context.endDraw();
-    resetTextureFiltering(tex_src.glName);
+    resetTextureFiltering(src.getGLTextureId());
     context.end("FXAA.apply");
   }
   

@@ -16,8 +16,7 @@ import com.thomasdiewald.pixelflow.java.DwPixelFlow;
 import com.thomasdiewald.pixelflow.java.dwgl.DwGLSLProgram;
 import com.thomasdiewald.pixelflow.java.dwgl.DwGLTexture;
 
-import processing.opengl.PGraphicsOpenGL;
-import processing.opengl.Texture;
+import studio.engine.RenderTarget;
 
 public class Gamma {
   
@@ -29,22 +28,22 @@ public class Gamma {
     this.context = context;
   }
   
-  public void apply(PGraphicsOpenGL src, PGraphicsOpenGL dst, float gamma) {
-    Texture tex_src = src.getTexture(); if(!tex_src.available()) return;
-    Texture tex_dst = dst.getTexture(); if(!tex_dst.available()) return;
+  public void apply(RenderTarget src, RenderTarget dst, float gamma) {
+    if(!src.isSampleable()) return;
+    if(!dst.isSampleable()) return;
     
     context.begin();
     context.beginDraw(dst);
-    apply(tex_src.glName,dst.width, dst.height, gamma);
+    apply(src.getGLTextureId(),dst.getWidth(), dst.getHeight(), gamma);
     context.endDraw();
     context.end("GammaCorrection.apply");
   }
   
-  public void apply(PGraphicsOpenGL src_dst) {
+  public void apply(RenderTarget src_dst) {
     apply(src_dst, src_dst, gamma);
   }
   
-  public void apply(PGraphicsOpenGL src, PGraphicsOpenGL dst) {
+  public void apply(RenderTarget src, RenderTarget dst) {
     apply(src, dst, gamma);
   }
   

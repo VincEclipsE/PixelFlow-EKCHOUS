@@ -20,8 +20,7 @@ import com.thomasdiewald.pixelflow.java.DwPixelFlow;
 import com.thomasdiewald.pixelflow.java.dwgl.DwGLSLProgram;
 import com.thomasdiewald.pixelflow.java.dwgl.DwGLTexture;
 import com.thomasdiewald.pixelflow.java.imageprocessing.filter.DwFilter;
-import processing.opengl.PGraphicsOpenGL;
-import processing.opengl.Texture;
+import studio.engine.RenderTarget;
 
 
 /**
@@ -80,7 +79,7 @@ public class DwFlowField {
   
   public DwFlowField(DwPixelFlow context){
     this.context = context;
-    context.papplet.registerMethod("dispose", this);
+    context.registerDispose(this);
     
     String data_path = DwPixelFlow.SHADER_DIR+"Filter/";
     
@@ -120,9 +119,9 @@ public class DwFlowField {
     return resized;
   }
   
-  public void create(PGraphicsOpenGL pg_src){
-    Texture tex_src = pg_src.getTexture(); if(!tex_src.available())  return;
-    create(tex_src.glName, tex_src.glWidth, tex_src.glHeight);
+  public void create(RenderTarget pg_src){
+    if(!pg_src.isSampleable()) return;
+    create(src.getGLTextureId(), src.getWidth(), src.getHeight());
   }
   
   public void create(DwGLTexture tex_src){
@@ -177,9 +176,9 @@ public class DwFlowField {
   
 
   
-  public void displayLines(PGraphicsOpenGL dst){
-    int   w = dst.width;
-    int   h = dst.height;
+  public void displayLines(RenderTarget dst){
+    int   w = dst.getWidth();
+    int   h = dst.getHeight();
     int   lines_x   = (int) Math.ceil(w/param.line_spacing);
     int   lines_y   = (int) Math.ceil(h/param.line_spacing);
     int   num_lines = lines_x * lines_y;
@@ -203,9 +202,9 @@ public class DwFlowField {
     context.end();
   }
   
-  public void displayPixel(PGraphicsOpenGL dst){
-    int w = dst.width;
-    int h = dst.height;
+  public void displayPixel(RenderTarget dst){
+    int w = dst.getWidth();
+    int h = dst.getHeight();
     context.begin();
     context.beginDraw(dst);
     blendMode();
@@ -249,8 +248,8 @@ public class DwFlowField {
   public DwGLTexture.TexturePingPong tex_lic = new DwGLTexture.TexturePingPong();
   
 
-  public void displayLineIntegralConvolution(PGraphicsOpenGL dst, PGraphicsOpenGL src){
-    resizeLic(dst.width, dst.height);
+  public void displayLineIntegralConvolution(RenderTarget dst, RenderTarget src){
+    resizeLic(dst.getWidth(), dst.getHeight());
     DwFilter.get(context).copy.apply(src, tex_lic.src);
     applyLineIntegralConvolution();
     DwFilter.get(context).copy.apply(tex_lic.src, dst);

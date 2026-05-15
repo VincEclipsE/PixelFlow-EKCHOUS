@@ -17,8 +17,7 @@ import com.thomasdiewald.pixelflow.java.DwPixelFlow;
 import com.thomasdiewald.pixelflow.java.dwgl.DwGLSLProgram;
 import com.thomasdiewald.pixelflow.java.dwgl.DwGLTexture;
 
-import processing.opengl.PGraphicsOpenGL;
-import processing.opengl.Texture;
+import studio.engine.RenderTarget;
 
 public class BoxBlur {
   
@@ -32,7 +31,7 @@ public class BoxBlur {
     this.context = context;
   }
 
-  public void apply(PGraphicsOpenGL src, PGraphicsOpenGL dst, PGraphicsOpenGL tmp, int radius) {
+  public void apply(RenderTarget src, RenderTarget dst, RenderTarget tmp, int radius) {
     if(src == tmp || dst == tmp){
       System.out.println("BoxBlur error: read-write race");
       return;
@@ -41,14 +40,14 @@ public class BoxBlur {
       return; 
     }
 
-    Texture tex_src = src.getTexture(); if(!tex_src.available())  return;
-    Texture tex_dst = dst.getTexture(); if(!tex_dst.available())  return;
-    Texture tex_tmp = tmp.getTexture(); if(!tex_tmp.available())  return;
+    if(!src.isSampleable()) return;
+    if(!dst.isSampleable()) return;
+    if(!tmp.isSampleable()) return;
     
 //    tmp.beginDraw();
     context.begin();
     context.beginDraw(tmp);
-    pass(tex_src.glName, tmp.width, tmp.height, radius, HORZ);
+    pass(src.getGLTextureId(), tmp.getWidth(), tmp.getHeight(), radius, HORZ);
     context.endDraw();
     context.end("BoxBlur.apply - HORZ");
 //    tmp.endDraw();
@@ -56,7 +55,7 @@ public class BoxBlur {
 //    dst.beginDraw();
     context.begin();
     context.beginDraw(dst);
-    pass(tex_tmp.glName, dst.width, dst.height, radius, VERT);
+    pass(tmp.getGLTextureId(), dst.getWidth(), dst.getHeight(), radius, VERT);
     context.endDraw();
     context.end("BoxBlur.apply - VERT");
 //    dst.endDraw(); 

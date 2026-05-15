@@ -104,7 +104,7 @@ public class DwFluid2D{
 
   public DwFluid2D(DwPixelFlow context){
     this.context = context;
-    context.papplet.registerMethod("dispose", this);
+    context.registerDispose(this);
     
     shader_obstacleBounds        = context.createShader(DwPixelFlow.SHADER_DIR+"Fluid/obstacleBounds.frag");
     shader_advect                = context.createShader(DwPixelFlow.SHADER_DIR+"Fluid/advect.frag"        ); 
@@ -494,8 +494,8 @@ public class DwFluid2D{
   
   public void renderFluidTextures(PGraphics2D dst, int display_mode){
     
-    int w = dst.width;
-    int h = dst.height;
+    int w = dst.getWidth();
+    int h = dst.getHeight();
     
     context.begin();
     context.beginDraw(dst);
@@ -519,8 +519,8 @@ public class DwFluid2D{
 
   public void renderFluidVectors(PGraphics2D dst, int spacing){
 
-    int w = dst.width;
-    int h = dst.height;
+    int w = dst.getWidth();
+    int h = dst.getHeight();
     
     int   lines_x    = Math.round(w / spacing);
     int   lines_y    = Math.round(h / spacing);

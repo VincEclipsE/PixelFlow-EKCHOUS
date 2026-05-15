@@ -15,8 +15,7 @@ import com.thomasdiewald.pixelflow.java.DwPixelFlow;
 import com.thomasdiewald.pixelflow.java.dwgl.DwGLSLProgram;
 import com.thomasdiewald.pixelflow.java.dwgl.DwGLTexture;
 
-import processing.opengl.PGraphicsOpenGL;
-import processing.opengl.Texture;
+import studio.engine.RenderTarget;
 
 /**
  * 
@@ -68,25 +67,25 @@ public class Merge {
     apply(dst, alloc(tex_src, tex_weights));
   }
   
-  public void apply(PGraphicsOpenGL dst, DwGLTexture[] tex_src, float[] tex_weights){
+  public void apply(RenderTarget dst, DwGLTexture[] tex_src, float[] tex_weights){
     apply(dst, alloc(tex_src, tex_weights));
   }
   
-  public void apply(PGraphicsOpenGL dst, PGraphicsOpenGL[] tex_src, float[] tex_weights){
+  public void apply(RenderTarget dst, RenderTarget[] tex_src, float[] tex_weights){
     apply(dst, alloc(tex_src, tex_weights));
   }
   
-  public void apply(DwGLTexture dst, PGraphicsOpenGL[] tex_src, float[] tex_weights){
+  public void apply(DwGLTexture dst, RenderTarget[] tex_src, float[] tex_weights){
     apply(dst, alloc(tex_src, tex_weights));
   }
   
 
-  public void apply(PGraphicsOpenGL dst, TexMad ... tex){
+  public void apply(RenderTarget dst, TexMad ... tex){
     if(tex == null) return;
-    Texture tex_dst = dst.getTexture(); if(!tex_dst.available())  return;
+    if(!dst.isSampleable()) return;
     context.begin();
     context.beginDraw(dst);
-    apply(tex_dst.glWidth, tex_dst.glHeight, tex);
+    apply(dst.getWidth(), dst.getHeight(), tex);
     context.endDraw();
     context.end("Merge.apply");
   }
@@ -234,7 +233,7 @@ public class Merge {
     public TexMad(DwGLTexture tex, float mul, float add){
       set(tex, mul, add);
     }
-    public TexMad(PGraphicsOpenGL pg, float mul, float add){
+    public TexMad(RenderTarget pg, float mul, float add){
       set(pg, mul, add);
     } 
     public TexMad set(DwGLTexture tex, float mul, float add){
@@ -243,7 +242,7 @@ public class Merge {
       this.add = add;
       return this;
     }
-    public TexMad set(PGraphicsOpenGL pg, float mul, float add){
+    public TexMad set(RenderTarget pg, float mul, float add){
       Texture tex = pg.getTexture(); if(!tex.available()) return this;
       this.tex = tex.glName;
       this.mul = mul;
@@ -267,7 +266,7 @@ public class Merge {
     return tex;
   }
   
-  public TexMad[] alloc(PGraphicsOpenGL[] tex_src, float[] tex_weights){
+  public TexMad[] alloc(RenderTarget[] tex_src, float[] tex_weights){
     if((tex_src.length * 2) != tex_weights.length) return null;
     
     TexMad[] tex = new TexMad[tex_src.length];

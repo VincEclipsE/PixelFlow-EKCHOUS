@@ -16,8 +16,7 @@ import com.thomasdiewald.pixelflow.java.DwPixelFlow;
 import com.thomasdiewald.pixelflow.java.dwgl.DwGLSLProgram;
 import com.thomasdiewald.pixelflow.java.dwgl.DwGLTexture;
 
-import processing.opengl.PGraphicsOpenGL;
-import processing.opengl.Texture;
+import studio.engine.RenderTarget;
 
 public class Convolution {
   
@@ -32,19 +31,19 @@ public class Convolution {
    *         3 4 5
    *         6 7 8
    */
-  public void apply(PGraphicsOpenGL src, PGraphicsOpenGL dst, float[] kernel) {
+  public void apply(RenderTarget src, RenderTarget dst, float[] kernel) {
     if(src == dst){
       System.out.println("Convolution error: read-write race");
       return;
     }
     if(kernel.length < 9) return;
     
-    Texture tex_src = src.getTexture(); if(!tex_src.available())  return;
-    Texture tex_dst = dst.getTexture(); if(!tex_dst.available())  return;
+    if(!src.isSampleable()) return;
+    if(!dst.isSampleable()) return;
        
     context.begin();
     context.beginDraw(dst);
-    apply(tex_src.glName, dst.width, dst.height, kernel);
+    apply(src.getGLTextureId(), dst.getWidth(), dst.getHeight(), kernel);
     context.endDraw();
     context.end("Convolution.apply");
   }

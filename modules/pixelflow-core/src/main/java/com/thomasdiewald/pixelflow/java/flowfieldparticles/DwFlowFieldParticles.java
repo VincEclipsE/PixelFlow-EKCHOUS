@@ -22,7 +22,7 @@ import com.thomasdiewald.pixelflow.java.imageprocessing.filter.DistanceTransform
 import com.thomasdiewald.pixelflow.java.imageprocessing.filter.DwFilter;
 import com.thomasdiewald.pixelflow.java.imageprocessing.filter.Merge.TexMad;
 
-import processing.opengl.PGraphicsOpenGL;
+import studio.engine.RenderTarget;
 
 /**
  * 
@@ -159,7 +159,7 @@ public class DwFlowFieldParticles{
   
   public DwFlowFieldParticles(DwPixelFlow context, int num_particles){    
     this.context = context;
-    context.papplet.registerMethod("dispose", this);
+    context.registerDispose(this);
     
     String filename;
     
@@ -536,13 +536,13 @@ public class DwFlowFieldParticles{
 
   
   
-  public void displayParticles(PGraphicsOpenGL canvas){
+  public void displayParticles(RenderTarget canvas){
     if(param.size_display <= 0) return;
     context.begin();
     context.beginDraw(canvas);
     displayParticles(canvas.width, canvas.height);
     context.endDraw();
-    context.end("DwFlowFieldParticles.displayParticles PGraphicsOpenGL");
+    context.end("DwFlowFieldParticles.displayParticles RenderTarget");
   }
   
   public void displayParticles(DwGLTexture canvas){
@@ -554,13 +554,13 @@ public class DwFlowFieldParticles{
     context.end("DwFlowFieldParticles.displayParticles DwGLTexture");
   }
   
-  public void displayTrail(PGraphicsOpenGL canvas){
+  public void displayTrail(RenderTarget canvas){
     if(param.display_line_width <= 0) return;
     context.begin();
     context.beginDraw(canvas);
     displayTrail(canvas.width, canvas.height);
     context.endDraw();
-    context.end("DwFlowFieldParticles.displayTrail PGraphicsOpenGL");
+    context.end("DwFlowFieldParticles.displayTrail RenderTarget");
   }
   
   public void displayTrail(DwGLTexture canvas){
@@ -699,7 +699,7 @@ public class DwFlowFieldParticles{
  
   
 
-  public void createObstacleFlowField(PGraphicsOpenGL pg_scene, int[] FG, boolean FG_invert){
+  public void createObstacleFlowField(RenderTarget pg_scene, int[] FG, boolean FG_invert){
     if(param.mul_obs <= 0.0) return;
     
     float[] FG_mask = {FG[0]/255f, FG[1]/255f, FG[2]/255f, FG[3]/255f};

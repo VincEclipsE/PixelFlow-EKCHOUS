@@ -14,8 +14,7 @@ import com.thomasdiewald.pixelflow.java.DwPixelFlow;
 import com.thomasdiewald.pixelflow.java.dwgl.DwGLSLProgram;
 import com.thomasdiewald.pixelflow.java.render.skylight.DwScreenSpaceGeometryBuffer;
 
-import processing.opengl.PGraphicsOpenGL;
-import processing.opengl.Texture;
+import studio.engine.RenderTarget;
 
 
 /**
@@ -43,7 +42,7 @@ public class DepthOfField {
     this.shader = context.createShader(DwPixelFlow.SHADER_DIR+"Filter/depth_of_field.frag");
   }
   
-  public void apply(PGraphicsOpenGL src, PGraphicsOpenGL dst, DwScreenSpaceGeometryBuffer geom) {
+  public void apply(RenderTarget src, RenderTarget dst, DwScreenSpaceGeometryBuffer geom) {
     Texture tex_src  = src         .getTexture();  if(!tex_src .available())  return;
     Texture tex_geom = geom.pg_geom.getTexture();  if(!tex_geom.available())  return;
 
@@ -51,8 +50,8 @@ public class DepthOfField {
       System.out.println("DepthOfField.apply error: read-write race");
     }
 
-    int w = dst.width;
-    int h = dst.height;
+    int w = dst.getWidth();
+    int h = dst.getHeight();
     
 //    dst.loadTexture();
     
@@ -63,8 +62,8 @@ public class DepthOfField {
     shader.uniform2f     ("clip_nf"   , param.clip_z_near, param.clip_z_far);
     shader.uniform2f     ("focus_pos" , param.focus_pos[0], param.focus_pos[1]);
     shader.uniform1f     ("mult_blur" , param.mult_blur);
-    shader.uniformTexture("tex_src"   , tex_src.glName);
-    shader.uniformTexture("tex_geom"  , tex_geom.glName);
+    shader.uniformTexture("tex_src"   , src.getGLTextureId());
+    shader.uniformTexture("tex_geom"  , geom.getGLTextureId());
     shader.drawFullScreenQuad();
     shader.end();
     context.endDraw();

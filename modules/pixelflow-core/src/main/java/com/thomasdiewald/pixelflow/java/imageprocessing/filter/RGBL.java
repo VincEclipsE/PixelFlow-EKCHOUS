@@ -15,8 +15,7 @@ import com.thomasdiewald.pixelflow.java.DwPixelFlow;
 import com.thomasdiewald.pixelflow.java.dwgl.DwGLSLProgram;
 import com.thomasdiewald.pixelflow.java.dwgl.DwGLTexture;
 
-import processing.opengl.PGraphicsOpenGL;
-import processing.opengl.Texture;
+import studio.engine.RenderTarget;
 
 public class RGBL {
   
@@ -32,25 +31,25 @@ public class RGBL {
     this.context = context;
   }
   
-  public void apply(PGraphicsOpenGL src, PGraphicsOpenGL dst) {
-    Texture tex_src = src.getTexture(); if(!tex_src.available())  return;
-    Texture tex_dst = dst.getTexture(); if(!tex_dst.available())  return;
+  public void apply(RenderTarget src, RenderTarget dst) {
+    if(!src.isSampleable()) return;
+    if(!dst.isSampleable()) return;
 
     context.begin();
     context.beginDraw(dst);
-    apply(tex_src.glName, dst.width, dst.height);
+    apply(src.getGLTextureId(), dst.getWidth(), dst.getHeight());
     context.endDraw();
     context.end("RGBL.apply");
   }
   
-  public void apply(PGraphicsOpenGL src, DwGLTexture dst) {
+  public void apply(RenderTarget src, DwGLTexture dst) {
     Texture tex_src = src.getTexture();
     if(!tex_src.available()) 
       return;
        
     context.begin();
     context.beginDraw(dst);
-    apply(tex_src.glName, dst.w, dst.h);
+    apply(src.getGLTextureId(), dst.w, dst.h);
     context.endDraw();
     context.end("RGBL.apply");
   }

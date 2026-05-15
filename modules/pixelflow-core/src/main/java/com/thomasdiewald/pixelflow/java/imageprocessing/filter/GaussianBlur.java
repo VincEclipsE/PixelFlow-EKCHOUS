@@ -17,8 +17,7 @@ import com.thomasdiewald.pixelflow.java.DwPixelFlow;
 import com.thomasdiewald.pixelflow.java.dwgl.DwGLSLProgram;
 import com.thomasdiewald.pixelflow.java.dwgl.DwGLTexture;
 
-import processing.opengl.PGraphicsOpenGL;
-import processing.opengl.Texture;
+import studio.engine.RenderTarget;
 
 public class GaussianBlur {
   
@@ -73,11 +72,11 @@ public class GaussianBlur {
 
   
 
-  public void apply(PGraphicsOpenGL src, PGraphicsOpenGL dst, PGraphicsOpenGL tmp, int radius) {
+  public void apply(RenderTarget src, RenderTarget dst, RenderTarget tmp, int radius) {
     apply(src, dst, tmp, radius, radius * DEFAULT_RADIUS_SIGMA_RATIO);
   }
 
-  public void apply(PGraphicsOpenGL src, PGraphicsOpenGL dst, PGraphicsOpenGL tmp, int radius, float sigma) {
+  public void apply(RenderTarget src, RenderTarget dst, RenderTarget tmp, int radius, float sigma) {
     if(src == tmp || dst == tmp){
       System.out.println("GaussianBlur error: read-write race");
       return;
@@ -86,20 +85,20 @@ public class GaussianBlur {
       return; 
     }
     
-    Texture tex_src = src.getTexture(); if(!tex_src.available()) return;
-    Texture tex_dst = dst.getTexture(); if(!tex_dst.available()) return;
-    Texture tex_tmp = tmp.getTexture(); if(!tex_tmp.available()) return;
+    if(!src.isSampleable()) return;
+    if(!dst.isSampleable()) return;
+    if(!tmp.isSampleable()) return;
     
     context.begin();
     
     context.beginDraw(tmp);
-    pass(tex_src.glName, tmp.width, tmp.height, radius, sigma, HORZ);
+    pass(src.getGLTextureId(), tmp.getWidth(), tmp.getHeight(), radius, sigma, HORZ);
     context.endDraw("GaussianBlur.apply - HORZ");
 
 //    Texture tex_tmp = tmp.getTexture();
     
     context.beginDraw(dst);
-    pass(tex_tmp.glName, dst.width, dst.height, radius, sigma, VERT);
+    pass(tmp.getGLTextureId(), dst.getWidth(), dst.getHeight(), radius, sigma, VERT);
     context.endDraw("GaussianBlur.apply - VERT");
     
     context.end();

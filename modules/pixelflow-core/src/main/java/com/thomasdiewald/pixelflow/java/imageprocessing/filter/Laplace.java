@@ -15,8 +15,7 @@ import com.thomasdiewald.pixelflow.java.DwPixelFlow;
 import com.thomasdiewald.pixelflow.java.dwgl.DwGLSLProgram;
 import com.thomasdiewald.pixelflow.java.dwgl.DwGLTexture;
 
-import processing.opengl.PGraphicsOpenGL;
-import processing.opengl.Texture;
+import studio.engine.RenderTarget;
 
 public class Laplace {
   
@@ -53,11 +52,11 @@ public class Laplace {
   DwGLSLProgram[] shader_ubyte = new DwGLSLProgram[TYPE.values().length];
   
   
-  public void apply(PGraphicsOpenGL src, PGraphicsOpenGL dst, Laplace.TYPE kernel) {
+  public void apply(RenderTarget src, RenderTarget dst, Laplace.TYPE kernel) {
     apply(src, dst, kernel, new float[]{0.5f,0.5f});
   }
 
-  public void apply(PGraphicsOpenGL src, PGraphicsOpenGL dst, Laplace.TYPE kernel, float[] mad) {
+  public void apply(RenderTarget src, RenderTarget dst, Laplace.TYPE kernel, float[] mad) {
     if(src == dst){
       System.out.println("Laplace error: read-write race");
       return;
@@ -66,12 +65,12 @@ public class Laplace {
       return;
     }
     kernel.buildShader(context);
-    Texture tex_src = src.getTexture(); if(!tex_src.available())  return;
-    Texture tex_dst = dst.getTexture(); if(!tex_dst.available())  return;
+    if(!src.isSampleable()) return;
+    if(!dst.isSampleable()) return;
     
     context.begin();
     context.beginDraw(dst);
-    apply(kernel.shader, tex_src.glName, dst.width, dst.height, mad);
+    apply(kernel.shader, src.getGLTextureId(), dst.getWidth(), dst.getHeight(), mad);
     context.endDraw();
     context.end("LaplaceFilter.apply");
   }

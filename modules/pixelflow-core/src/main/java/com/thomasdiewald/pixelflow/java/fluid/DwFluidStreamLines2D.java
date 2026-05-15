@@ -48,11 +48,11 @@ public class DwFluidStreamLines2D{
   
   public DwFluidStreamLines2D(DwPixelFlow context){
     this.context = context;
-    this.context.papplet.registerMethod("dispose", this);
+    this.context.registerDispose(this);
   }
   
 //  public Streamlines(PixelFlow context, int num_lines_x, int num_lines_y){
-//    context.papplet.registerMethod("dispose", this);
+//    context.registerDispose(this);
 //    this.resize(context, num_lines_x, num_lines_y);
 //  }
   
@@ -123,8 +123,8 @@ public class DwFluidStreamLines2D{
   
   public void render(PGraphics2D dst, DwFluid2D fluid, int spacing){
     
-    int w = dst.width;
-    int h = dst.height;
+    int w = dst.getWidth();
+    int h = dst.getHeight();
     
     {
       int   lines_x    = Math.round(w / spacing);

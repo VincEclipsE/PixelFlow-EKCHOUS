@@ -15,8 +15,7 @@ import com.thomasdiewald.pixelflow.java.DwPixelFlow;
 import com.thomasdiewald.pixelflow.java.dwgl.DwGLSLProgram;
 import com.thomasdiewald.pixelflow.java.dwgl.DwGLTexture;
 
-import processing.opengl.PGraphicsOpenGL;
-import processing.opengl.Texture;
+import studio.engine.RenderTarget;
 
 public class Mad {
   
@@ -27,37 +26,37 @@ public class Mad {
   }
   
   
-  public void apply(PGraphicsOpenGL src, PGraphicsOpenGL dst, float[] mad) {
-    Texture tex_src = src.getTexture(); if(!tex_src.available())  return;
-    Texture tex_dst = dst.getTexture(); if(!tex_dst.available())  return;
+  public void apply(RenderTarget src, RenderTarget dst, float[] mad) {
+    if(!src.isSampleable()) return;
+    if(!dst.isSampleable()) return;
        
     context.begin();
     context.beginDraw(dst);
-    apply(tex_src.glName, dst.width, dst.height, mad);
+    apply(src.getGLTextureId(), dst.getWidth(), dst.getHeight(), mad);
     context.endDraw();
     context.end("Mad.apply");
   }
   
-  public void apply(PGraphicsOpenGL src, DwGLTexture dst, float[] mad) {
+  public void apply(RenderTarget src, DwGLTexture dst, float[] mad) {
     Texture tex_src = src.getTexture();
     if(!tex_src.available()) 
       return;
        
     context.begin();
     context.beginDraw(dst);
-    apply(tex_src.glName, dst.w, dst.h, mad);
+    apply(src.getGLTextureId(), dst.w, dst.h, mad);
     context.endDraw();
     context.end("Mad.apply");
   }
   
-  public void apply(DwGLTexture src, PGraphicsOpenGL dst, float[] mad) {
+  public void apply(DwGLTexture src, RenderTarget dst, float[] mad) {
     Texture tex_src = dst.getTexture();
     if(!tex_src.available()) 
       return;
        
     context.begin();
     context.beginDraw(dst);
-    apply(tex_src.glName, dst.width, dst.height, mad);
+    apply(src.getGLTextureId(), dst.getWidth(), dst.getHeight(), mad);
     context.endDraw();
     context.end("Mad.apply");
   }

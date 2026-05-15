@@ -20,8 +20,7 @@ import com.thomasdiewald.pixelflow.java.dwgl.DwGLTexture;
 import com.thomasdiewald.pixelflow.java.imageprocessing.filter.DwFilter;
 import com.thomasdiewald.pixelflow.java.utils.DwUtils;
 
-import processing.opengl.PGraphicsOpenGL;
-import processing.opengl.Texture;
+import studio.engine.RenderTarget;
 
 
 
@@ -85,7 +84,7 @@ public class MinMaxGlobal {
     resize(tex.internalFormat, tex.w, tex.h, tex.format, tex.type, tex.num_channel, tex.byte_per_channel);
   }
   
-  public void resize(PGraphicsOpenGL pg){
+  public void resize(RenderTarget pg){
     resize(GL2.GL_RGBA8, pg.width, pg.height, GL2.GL_RGBA, GL2.GL_UNSIGNED_BYTE, 4, 1);
   }
   
@@ -120,11 +119,11 @@ public class MinMaxGlobal {
     apply(tex_src, true, true);
   }
   
-  public void apply(PGraphicsOpenGL pg_src){
+  public void apply(RenderTarget pg_src){
     apply(pg_src, true, true);
   }
   
-  public void apply(PGraphicsOpenGL pg_src, boolean MIN, boolean MAX){
+  public void apply(RenderTarget pg_src, boolean MIN, boolean MAX){
     if(!MIN && !MAX) return;
     resize(pg_src);
     DwFilter.get(context).copy.apply(pg_src, tex[0]);
@@ -215,7 +214,7 @@ public class MinMaxGlobal {
    * remap pixels [min, max] to [0, 1]
    * 
    */
-  public void map(PGraphicsOpenGL pg){
+  public void map(RenderTarget pg){
     map(pg, pg, false);
   }
 
@@ -224,7 +223,7 @@ public class MinMaxGlobal {
    * remap pixels [min, max] to [0, 1]
    * 
    */
-  public void map(PGraphicsOpenGL pg_src, PGraphicsOpenGL pg_dst){
+  public void map(RenderTarget pg_src, RenderTarget pg_dst){
     map(pg_src, pg_dst, false);
   }
 
@@ -233,11 +232,11 @@ public class MinMaxGlobal {
    * remap pixels [min, max] to [0, 1]
    * 
    */
-  public void map(PGraphicsOpenGL pg_src, PGraphicsOpenGL pg_dst, boolean per_channel){
-    Texture tex_src = pg_src.getTexture(); if(!tex_src.available()) return;
+  public void map(RenderTarget pg_src, RenderTarget pg_dst, boolean per_channel){
+    if(!pg_src.isSampleable()) return;
     context.begin();
     context.beginDraw(pg_dst);
-    map(pg_dst.width, pg_dst.height, tex_src.glName, per_channel);
+    map(pg_dst.width, pg_dst.height, src.getGLTextureId(), per_channel);
     context.endDraw();
     context.end("MinMaxGlobal.map");
   }

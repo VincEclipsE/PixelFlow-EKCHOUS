@@ -16,7 +16,7 @@ import com.thomasdiewald.pixelflow.java.DwPixelFlow;
 import com.thomasdiewald.pixelflow.java.dwgl.DwGLTexture;
 import com.thomasdiewald.pixelflow.java.utils.DwUtils;
 
-import processing.opengl.PGraphicsOpenGL;
+import studio.engine.RenderTarget;
 
 /**
  * @author Thomas Diewald
@@ -68,9 +68,9 @@ public class GaussianBlurPyramid {
   // TODO tackle internal format detection.
   // more precision is good, like 16F
   
-  public void resize(PGraphicsOpenGL src){
-//    resize(src.width, src.height, GL2.GL_RGBA8, GL2.GL_RGBA, GLES3.GL_UNSIGNED_BYTE, 4, 1);
-    resize(src.width, src.height, GL2.GL_RGBA16F, GL2.GL_RGBA, GL2.GL_FLOAT, 4, 2);
+  public void resize(RenderTarget src){
+//    resize(src.getWidth(), src.getHeight(), GL2.GL_RGBA8, GL2.GL_RGBA, GLES3.GL_UNSIGNED_BYTE, 4, 1);
+    resize(src.getWidth(), src.getHeight(), GL2.GL_RGBA16F, GL2.GL_RGBA, GL2.GL_FLOAT, 4, 2);
   }
   
   public void resize(DwGLTexture src){
@@ -118,7 +118,7 @@ public class GaussianBlurPyramid {
   }
   
 
-  public void apply(PGraphicsOpenGL src, int radius){
+  public void apply(RenderTarget src, int radius){
     resize(src);
     DwFilter.get(context).copy.apply(src, tex_blur[0]);
     createPyramid(radius);

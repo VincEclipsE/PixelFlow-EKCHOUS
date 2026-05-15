@@ -22,7 +22,6 @@ import processing.core.PApplet;
 import processing.core.PConstants;
 import processing.opengl.PGL;
 import processing.opengl.PGraphics3D;
-import processing.opengl.Texture;
 
 public class GBAA {
   
@@ -61,8 +60,8 @@ public class GBAA {
 
   public void apply(PGraphics3D src, PGraphics3D dst){
     
-    int w = src.width;
-    int h = src.height;
+    int w = src.getWidth();
+    int h = src.getHeight();
     
     resize(w, h);
     
@@ -86,16 +85,16 @@ public class GBAA {
       return;
     }
     
-    Texture tex_src = src.getTexture(); if(!tex_src.available())  return;
-    Texture tex_dst = dst.getTexture(); if(!tex_dst.available())  return;
-    Texture tex_edges = pg_edges.getTexture(); if(!tex_edges.available())  return;
+    if(!src.isSampleable()) return;
+    if(!dst.isSampleable()) return;
+    if(!pg_edges.isSampleable()) return;
 
     context.begin();
     context.beginDraw(dst);
     shader_gbaa.begin();
     shader_gbaa.uniform2f     ("wh_rcp" , 1f/w, 1f/h);
-    shader_gbaa.uniformTexture("tex_src", tex_src.glName);
-    shader_gbaa.uniformTexture("tex_edges", tex_edges.glName);
+    shader_gbaa.uniformTexture("tex_src", src.getGLTextureId());
+    shader_gbaa.uniformTexture("tex_edges", edges.getGLTextureId());
     shader_gbaa.drawFullScreenQuad();
     shader_gbaa.end();
     context.endDraw();

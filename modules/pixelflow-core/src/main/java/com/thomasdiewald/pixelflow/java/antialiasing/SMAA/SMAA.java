@@ -22,8 +22,7 @@ import com.thomasdiewald.pixelflow.java.dwgl.DwGLSLProgram;
 import com.thomasdiewald.pixelflow.java.dwgl.DwGLTexture;
 import com.thomasdiewald.pixelflow.java.utils.DwUtils;
 
-import processing.opengl.PGraphicsOpenGL;
-import processing.opengl.Texture;
+import studio.engine.RenderTarget;
 
 /**
  * 
@@ -98,23 +97,23 @@ public class SMAA {
   
 
   
-  public void apply(PGraphicsOpenGL src, PGraphicsOpenGL dst) {
+  public void apply(RenderTarget src, RenderTarget dst) {
     if(src == dst){
       System.out.println("MSAA error: read-write race");
       return;
     }
     
-    Texture tex_src = src.getTexture(); if(!tex_src.available())  return;
-    Texture tex_dst = dst.getTexture(); if(!tex_dst.available())  return;
+    if(!src.isSampleable()) return;
+    if(!dst.isSampleable()) return;
 
-    int w = src.width;
-    int h = src.height;
+    int w = src.getWidth();
+    int h = src.getHeight();
     
     resize(w, h);
      
     context.begin();
     
-    setLinearTextureFiltering(tex_src.glName);
+    setLinearTextureFiltering(src.getGLTextureId());
 
     // PASS 1 - Edges
     context.beginDraw(tex_edges);
@@ -122,7 +121,7 @@ public class SMAA {
     context.gl.glClear(GL2ES2.GL_COLOR_BUFFER_BIT);
     shader_edges.begin();
     shader_edges.uniform2f     ("wh_rcp"   , 1f/w, 1f/h);
-    shader_edges.uniformTexture("tex_color", tex_src.glName);
+    shader_edges.uniformTexture("tex_color", src.getGLTextureId());
     shader_edges.drawFullScreenQuad();
     shader_edges.end();
     context.endDraw("smaa - pass1");
@@ -146,14 +145,14 @@ public class SMAA {
     context.gl.glClear(GL2ES2.GL_COLOR_BUFFER_BIT);
     shader_smaa.begin();
     shader_smaa.uniform2f     ("wh_rcp"   , 1f/w, 1f/h);
-    shader_smaa.uniformTexture("tex_color", tex_src.glName);
+    shader_smaa.uniformTexture("tex_color", src.getGLTextureId());
     shader_smaa.uniformTexture("tex_blend", tex_blend.HANDLE[0]);
     shader_smaa.drawFullScreenQuad();
     shader_smaa.end();
     context.endDraw("smaa - pass3");
 
     
-    resetTextureFiltering(tex_src.glName);
+    resetTextureFiltering(src.getGLTextureId());
     
     context.end("SMAA.apply");
   }

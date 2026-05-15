@@ -14,8 +14,7 @@ import com.thomasdiewald.pixelflow.java.DwPixelFlow;
 import com.thomasdiewald.pixelflow.java.dwgl.DwGLSLProgram;
 import com.thomasdiewald.pixelflow.java.dwgl.DwGLTexture;
 
-import processing.opengl.PGraphicsOpenGL;
-import processing.opengl.Texture;
+import studio.engine.RenderTarget;
 
 
 /**
@@ -35,14 +34,14 @@ public class Difference {
     this.context = context;
   }
   
-  public void apply(PGraphicsOpenGL dst, PGraphicsOpenGL texA, PGraphicsOpenGL texB) {
+  public void apply(RenderTarget dst, RenderTarget texA, RenderTarget texB) {
     Texture tex_dst  = dst .getTexture(); if(!tex_dst .available())  return;
-    Texture tex_texA = texA.getTexture(); if(!tex_texA.available())  return;
-    Texture tex_texB = texB.getTexture(); if(!tex_texB.available())  return; 
+    if(!texA.isSampleable()) return;
+    if(!texB.isSampleable()) return; 
 
     context.begin();
     context.beginDraw(dst);
-    apply(tex_texA.glName, tex_texB.glName, dst.width, dst.height);
+    apply(texA.getGLTextureId(), texB.getGLTextureId(), dst.getWidth(), dst.getHeight());
     context.endDraw();
     context.end("Difference.apply");
   }

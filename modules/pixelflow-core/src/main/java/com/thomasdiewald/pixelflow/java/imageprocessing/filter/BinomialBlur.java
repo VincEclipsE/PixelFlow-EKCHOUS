@@ -16,8 +16,7 @@ import com.thomasdiewald.pixelflow.java.DwPixelFlow;
 import com.thomasdiewald.pixelflow.java.dwgl.DwGLSLProgram;
 import com.thomasdiewald.pixelflow.java.dwgl.DwGLTexture;
 
-import processing.opengl.PGraphicsOpenGL;
-import processing.opengl.Texture;
+import studio.engine.RenderTarget;
 
 public class BinomialBlur {
   
@@ -103,7 +102,7 @@ public class BinomialBlur {
 
 
 
-  public void apply(PGraphicsOpenGL src, PGraphicsOpenGL dst, PGraphicsOpenGL tmp, TYPE kernel) {
+  public void apply(RenderTarget src, RenderTarget dst, RenderTarget tmp, TYPE kernel) {
     if(src == tmp || dst == tmp){
       System.out.println("BoxBlur error: read-write race");
       return;
@@ -112,16 +111,16 @@ public class BinomialBlur {
       return; 
     }
 
-    Texture tex_src = src.getTexture(); if(!tex_src.available())  return;
-    Texture tex_dst = dst.getTexture(); if(!tex_dst.available())  return;
-    Texture tex_tmp = tmp.getTexture(); if(!tex_tmp.available())  return;
+    if(!src.isSampleable()) return;
+    if(!dst.isSampleable()) return;
+    if(!tmp.isSampleable()) return;
     
     kernel.buildShader(context);
     
 //    tmp.beginDraw();
     context.begin();
     context.beginDraw(tmp);
-    pass(tex_src.glName, tmp.width, tmp.height, kernel.shader_horz);
+    pass(src.getGLTextureId(), tmp.getWidth(), tmp.getHeight(), kernel.shader_horz);
     context.endDraw();
     context.end("Binomial.apply - HORZ");
 //    tmp.endDraw();
@@ -129,7 +128,7 @@ public class BinomialBlur {
 //    dst.beginDraw();
     context.begin();
     context.beginDraw(dst);
-    pass(tex_tmp.glName, dst.width, dst.height, kernel.shader_vert);
+    pass(tmp.getGLTextureId(), dst.getWidth(), dst.getHeight(), kernel.shader_vert);
     context.endDraw();
     context.end("Binomial.apply - VERT");
 //    dst.endDraw(); 

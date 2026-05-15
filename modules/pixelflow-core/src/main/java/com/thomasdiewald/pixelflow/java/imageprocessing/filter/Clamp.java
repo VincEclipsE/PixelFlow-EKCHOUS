@@ -15,8 +15,7 @@ import com.thomasdiewald.pixelflow.java.DwPixelFlow;
 import com.thomasdiewald.pixelflow.java.dwgl.DwGLSLProgram;
 import com.thomasdiewald.pixelflow.java.dwgl.DwGLTexture;
 
-import processing.opengl.PGraphicsOpenGL;
-import processing.opengl.Texture;
+import studio.engine.RenderTarget;
 
 public class Clamp {
   
@@ -32,11 +31,11 @@ public class Clamp {
   }
   
   
-  public void apply(PGraphicsOpenGL src, PGraphicsOpenGL dst) {
+  public void apply(RenderTarget src, RenderTarget dst) {
     apply(src, dst, lo, hi);
   }
   
-  public void apply(PGraphicsOpenGL src, DwGLTexture dst) {
+  public void apply(RenderTarget src, DwGLTexture dst) {
     apply(src, dst, lo, hi);
   }
   
@@ -45,25 +44,25 @@ public class Clamp {
   }
   
   
-  public void apply(PGraphicsOpenGL src, PGraphicsOpenGL dst, float[] lo, float[] hi) {
-    Texture tex_src = src.getTexture(); if(!tex_src.available())  return;
-    Texture tex_dst = dst.getTexture(); if(!tex_dst.available())  return;
+  public void apply(RenderTarget src, RenderTarget dst, float[] lo, float[] hi) {
+    if(!src.isSampleable()) return;
+    if(!dst.isSampleable()) return;
 
     context.begin();
     context.beginDraw(dst);
-    apply(tex_src.glName, dst.width, dst.height, lo, hi);
+    apply(src.getGLTextureId(), dst.getWidth(), dst.getHeight(), lo, hi);
     context.endDraw();
     context.end("Clamp.apply");
   }
   
-  public void apply(PGraphicsOpenGL src, DwGLTexture dst, float[] lo, float[] hi) {
+  public void apply(RenderTarget src, DwGLTexture dst, float[] lo, float[] hi) {
     Texture tex_src = src.getTexture();
     if(!tex_src.available()) 
       return;
        
     context.begin();
     context.beginDraw(dst);
-    apply(tex_src.glName, dst.w, dst.h, lo, hi);
+    apply(src.getGLTextureId(), dst.w, dst.h, lo, hi);
     context.endDraw();
     context.end("Clamp.apply");
   }

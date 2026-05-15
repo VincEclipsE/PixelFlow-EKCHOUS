@@ -15,8 +15,7 @@ import com.thomasdiewald.pixelflow.java.DwPixelFlow;
 import com.thomasdiewald.pixelflow.java.dwgl.DwGLSLProgram;
 import com.thomasdiewald.pixelflow.java.dwgl.DwGLTexture;
 
-import processing.opengl.PGraphicsOpenGL;
-import processing.opengl.Texture;
+import studio.engine.RenderTarget;
 
 public class Multiply {
   
@@ -27,25 +26,25 @@ public class Multiply {
   }
   
   
-  public void apply(PGraphicsOpenGL src, PGraphicsOpenGL dst, float[] multiplier) {
-    Texture tex_src = src.getTexture(); if(!tex_src.available())  return;
-    Texture tex_dst = dst.getTexture(); if(!tex_dst.available())  return;
+  public void apply(RenderTarget src, RenderTarget dst, float[] multiplier) {
+    if(!src.isSampleable()) return;
+    if(!dst.isSampleable()) return;
 
     context.begin();
     context.beginDraw(dst);
-    apply(tex_src.glName, dst.width, dst.height, multiplier);
+    apply(src.getGLTextureId(), dst.getWidth(), dst.getHeight(), multiplier);
     context.endDraw();
     context.end("Multiply.apply");
   }
   
-  public void apply(PGraphicsOpenGL src, DwGLTexture dst, float[] multiplier) {
+  public void apply(RenderTarget src, DwGLTexture dst, float[] multiplier) {
     Texture tex_src = src.getTexture();
     if(!tex_src.available()) 
       return;
        
     context.begin();
     context.beginDraw(dst);
-    apply(tex_src.glName, dst.w, dst.h, multiplier);
+    apply(src.getGLTextureId(), dst.w, dst.h, multiplier);
     context.endDraw();
     context.end("Multiply.apply");
   }
@@ -87,14 +86,14 @@ public class Multiply {
   
   
   
-  public void apply(PGraphicsOpenGL src, PGraphicsOpenGL dst, PGraphicsOpenGL mul) {
-    Texture tex_src = src.getTexture(); if(!tex_src.available())  return;
-    Texture tex_dst = dst.getTexture(); if(!tex_dst.available())  return;
-    Texture tex_mul = mul.getTexture(); if(!tex_mul.available())  return; 
+  public void apply(RenderTarget src, RenderTarget dst, RenderTarget mul) {
+    if(!src.isSampleable()) return;
+    if(!dst.isSampleable()) return;
+    if(!mul.isSampleable()) return; 
     
     context.begin();
     context.beginDraw(dst);
-    apply(tex_src.glName, dst.width, dst.height, tex_mul.glName);
+    apply(src.getGLTextureId(), dst.getWidth(), dst.getHeight(), mul.getGLTextureId());
     context.endDraw();
     context.end("Multiply.apply");
   }

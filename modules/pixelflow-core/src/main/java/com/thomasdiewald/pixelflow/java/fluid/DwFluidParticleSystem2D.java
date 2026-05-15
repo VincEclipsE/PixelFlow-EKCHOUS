@@ -46,7 +46,7 @@ public class DwFluidParticleSystem2D{
   }
   
   public DwFluidParticleSystem2D(DwPixelFlow context, int num_particels_x, int num_particels_y){
-    context.papplet.registerMethod("dispose", this);
+    context.registerDispose(this);
     this.resize(context, num_particels_x, num_particels_y);
   }
   
@@ -131,8 +131,8 @@ public class DwFluidParticleSystem2D{
       sprite_tex_handle[0] = dst.getTexture(sprite).glName;
     }
 
-    int w = dst.width;
-    int h = dst.height;
+    int w = dst.getWidth();
+    int h = dst.getHeight();
 
     dst.beginDraw();
 //    dst.blendMode(PConstants.BLEND);
