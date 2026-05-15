@@ -54,6 +54,8 @@ public final class MainFrame extends JFrame {
     private final NodeFactoryRegistry registry;
     private final ToolsLibrary toolsLibrary;
     private final StatusBar statusBar;
+    private final RecentProjects recent = new RecentProjects();
+    private JMenu recentMenu;
 
     public MainFrame() {
         super("PixelFlow Studio");
@@ -74,6 +76,7 @@ public final class MainFrame extends JFrame {
         this.palette = new ToolPalette(registry, toolsLibrary);
         this.statusBar = new StatusBar();
         this.editor.setStatusBar(statusBar);
+        this.preview.setStatusBar(statusBar);
 
         JSplitPane center = new JSplitPane(JSplitPane.VERTICAL_SPLIT, editor, preview);
         center.setResizeWeight(0.55);
@@ -97,6 +100,7 @@ public final class MainFrame extends JFrame {
             preview.attachRuntime(loaded);
             editor.attachGraph(loaded);
             parameters.attachGraph(loaded);
+            preview.setGraphStats(loaded.graph.nodes().size(), loaded.graph.edges().size());
             statusBar.info("Loaded " + loaded.graph.nodes().size() + " nodes, "
                     + loaded.graph.edges().size() + " edges from "
                     + (model.currentPath() != null ? model.currentPath().getFileName() : "memory"));
@@ -128,6 +132,10 @@ public final class MainFrame extends JFrame {
         open.setAccelerator(KeyStroke.getKeyStroke("ctrl O"));
         open.addActionListener(e -> chooseProject());
         fileMenu.add(open);
+
+        recentMenu = new JMenu("Open Recent");
+        fileMenu.add(recentMenu);
+        rebuildRecentMenu();
 
         JMenuItem reload = new JMenuItem("Reload");
         reload.setAccelerator(KeyStroke.getKeyStroke("F5"));
@@ -190,8 +198,11 @@ public final class MainFrame extends JFrame {
     public void openProject(String path) {
         SwingUtilities.invokeLater(() -> {
             try {
-                model.loadProject(Paths.get(path));
+                Path p = Paths.get(path);
+                model.loadProject(p);
                 setTitle("PixelFlow Studio — " + path);
+                recent.add(p);
+                rebuildRecentMenu();
             } catch (IOException ex) {
                 statusBar.error("Open failed: " + ex.getMessage());
                 JOptionPane.showMessageDialog(this,
@@ -199,6 +210,24 @@ public final class MainFrame extends JFrame {
                         "Open error", JOptionPane.ERROR_MESSAGE);
             }
         });
+    }
+
+    private void rebuildRecentMenu() {
+        if (recentMenu == null) return;
+        recentMenu.removeAll();
+        var entries = recent.entries();
+        if (entries.isEmpty()) {
+            JMenuItem empty = new JMenuItem("(empty)");
+            empty.setEnabled(false);
+            recentMenu.add(empty);
+            return;
+        }
+        for (Path p : entries) {
+            String label = p.getFileName() == null ? p.toString() : p.getFileName().toString();
+            JMenuItem item = new JMenuItem(label + "   " + p.getParent());
+            item.addActionListener(e -> openProject(p.toString()));
+            recentMenu.add(item);
+        }
     }
 
     private void saveProject() {
@@ -234,6 +263,8 @@ public final class MainFrame extends JFrame {
             model.saveAs(f.toPath());
             setTitle("PixelFlow Studio — " + f.toPath());
             statusBar.info("Saved " + f.toPath().getFileName());
+            recent.add(f.toPath());
+            rebuildRecentMenu();
         } catch (IOException ex) {
             statusBar.error("Save failed: " + ex.getMessage());
             JOptionPane.showMessageDialog(this,

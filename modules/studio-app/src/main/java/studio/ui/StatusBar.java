@@ -25,14 +25,26 @@ public final class StatusBar extends JPanel {
     public enum Severity { INFO, ERROR }
 
     private final JLabel label = new JLabel(" ");
+    private final JLabel stats = new JLabel(" ");
     private Timer clearTimer;
 
     public StatusBar() {
         super(new BorderLayout());
         setBorder(BorderFactory.createEmptyBorder(2, 8, 2, 8));
-        label.setFont(label.getFont().deriveFont(Font.PLAIN, 12f));
+        Font font = label.getFont().deriveFont(Font.PLAIN, 12f);
+        label.setFont(font);
+        stats.setFont(font);
         label.setForeground(new Color(180, 180, 190));
+        stats.setForeground(new Color(140, 140, 150));
         add(label, BorderLayout.WEST);
+        add(stats, BorderLayout.EAST);
+    }
+
+    /** Set the right-aligned stats text (e.g. "12 nodes · 3 edges · 60 fps"). */
+    public void stats(String text) {
+        Runnable apply = () -> stats.setText(text == null ? " " : text);
+        if (SwingUtilities.isEventDispatchThread()) apply.run();
+        else SwingUtilities.invokeLater(apply);
     }
 
     public void info(String msg)  { show(msg, Severity.INFO,  4_000); }

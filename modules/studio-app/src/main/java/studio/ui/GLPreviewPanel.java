@@ -49,6 +49,26 @@ public final class GLPreviewPanel extends JPanel {
     @SuppressWarnings("unused")
     private final StudioModel model;
 
+    private StatusBar statusBar;
+    private long lastFpsNanos;
+    private int framesSinceFps;
+    private int nodeCount, edgeCount;
+
+    public void setStatusBar(StatusBar bar) { this.statusBar = bar; }
+
+    public void setGraphStats(int nodes, int edges) {
+        this.nodeCount = nodes;
+        this.edgeCount = edges;
+        if (statusBar != null) statusBar.stats(formatStats(0));
+    }
+
+    private String formatStats(int fps) {
+        StringBuilder s = new StringBuilder();
+        s.append(nodeCount).append(" nodes · ").append(edgeCount).append(" edges");
+        if (fps > 0) s.append(" · ").append(fps).append(" fps");
+        return s.toString();
+    }
+
     public GLPreviewPanel(StudioModel model) {
         super(new BorderLayout());
         this.model = model;
@@ -109,6 +129,20 @@ public final class GLPreviewPanel extends JPanel {
                 } else {
                     clearToBackdrop(d.getGL().getGL2ES2());
                 }
+            }
+            tickFps();
+        }
+
+        private void tickFps() {
+            framesSinceFps++;
+            long now = System.nanoTime();
+            if (lastFpsNanos == 0) { lastFpsNanos = now; return; }
+            long elapsed = now - lastFpsNanos;
+            if (elapsed >= 500_000_000L) {
+                int fps = (int) Math.round(framesSinceFps * 1e9 / elapsed);
+                framesSinceFps = 0;
+                lastFpsNanos = now;
+                if (statusBar != null) statusBar.stats(formatStats(fps));
             }
         }
 
