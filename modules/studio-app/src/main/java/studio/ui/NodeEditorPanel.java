@@ -100,8 +100,18 @@ public final class NodeEditorPanel extends JPanel {
 
         addKeyListener(new KeyAdapter() {
             @Override public void keyPressed(KeyEvent e) {
-                if (selected == null || current == null) return;
                 int code = e.getKeyCode();
+                if (code == KeyEvent.VK_F9) {
+                    showMinimap = !showMinimap;
+                    repaint();
+                    return;
+                }
+                if (code == KeyEvent.VK_HOME) {
+                    panX = 0; panY = 0; zoom = 1.0;
+                    repaint();
+                    return;
+                }
+                if (selected == null || current == null) return;
                 if (code == KeyEvent.VK_DELETE) {
                     current.graph.removeNode(selected.id());
                     layouts.remove(selected);
@@ -228,7 +238,68 @@ public final class NodeEditorPanel extends JPanel {
         }
 
         g.setTransform(original);
+
+        drawMinimap(g);
+
         g.dispose();
+    }
+
+    private static final int MINIMAP_W = 160;
+    private static final int MINIMAP_H = 100;
+    private static final int MINIMAP_PAD = 10;
+    private boolean showMinimap = true;
+
+    private void drawMinimap(Graphics2D g) {
+        if (!showMinimap || current == null || current.graph.nodes().isEmpty()) return;
+        int px = getWidth() - MINIMAP_W - MINIMAP_PAD;
+        int py = getHeight() - MINIMAP_H - MINIMAP_PAD;
+        g.setColor(new Color(0, 0, 0, 140));
+        g.fillRoundRect(px - 4, py - 4, MINIMAP_W + 8, MINIMAP_H + 8, 8, 8);
+        g.setColor(new Color(30, 30, 36));
+        g.fillRect(px, py, MINIMAP_W, MINIMAP_H);
+
+        // Compute graph bbox in world space
+        int minX = Integer.MAX_VALUE, minY = Integer.MAX_VALUE;
+        int maxX = Integer.MIN_VALUE, maxY = Integer.MIN_VALUE;
+        for (Node n : current.graph.nodes()) {
+            Layout L = layoutOf(n);
+            int h = nodeHeight(n);
+            minX = Math.min(minX, L.x);
+            minY = Math.min(minY, L.y);
+            maxX = Math.max(maxX, L.x + NODE_WIDTH);
+            maxY = Math.max(maxY, L.y + h);
+        }
+        int worldW = Math.max(1, maxX - minX);
+        int worldH = Math.max(1, maxY - minY);
+        double sx = (double) MINIMAP_W / worldW;
+        double sy = (double) MINIMAP_H / worldH;
+        double s = Math.min(sx, sy) * 0.9;
+        double offX = px + (MINIMAP_W - worldW * s) / 2.0 - minX * s;
+        double offY = py + (MINIMAP_H - worldH * s) / 2.0 - minY * s;
+
+        for (Node n : current.graph.nodes()) {
+            Layout L = layoutOf(n);
+            int h = nodeHeight(n);
+            int rx = (int) Math.round(offX + L.x * s);
+            int ry = (int) Math.round(offY + L.y * s);
+            int rw = Math.max(2, (int) Math.round(NODE_WIDTH * s));
+            int rh = Math.max(2, (int) Math.round(h * s));
+            g.setColor(n == selected ? new Color(255, 196, 64) : new Color(120, 160, 200));
+            g.fillRect(rx, ry, rw, rh);
+        }
+
+        // Viewport indicator (current pan/zoom view in world space)
+        double viewWorldW = getWidth() / zoom;
+        double viewWorldH = getHeight() / zoom;
+        double viewWorldX = -panX / zoom;
+        double viewWorldY = -panY / zoom;
+        int vx = (int) Math.round(offX + viewWorldX * s);
+        int vy = (int) Math.round(offY + viewWorldY * s);
+        int vw = (int) Math.round(viewWorldW * s);
+        int vh = (int) Math.round(viewWorldH * s);
+        g.setColor(new Color(255, 255, 255, 80));
+        g.setStroke(new BasicStroke(1.5f));
+        g.drawRect(vx, vy, vw, vh);
     }
 
     private void drawGrid(Graphics2D g) {

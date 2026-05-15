@@ -132,6 +132,10 @@ public final class HeadlessSmoke {
                           studio.nodes.filter.DifferenceNode::new)
                 .register(studio.nodes.filter.MultiplyNode.TYPE_ID,
                           studio.nodes.filter.MultiplyNode::new)
+                .register(studio.nodes.filter.MedianNode.TYPE_ID,
+                          studio.nodes.filter.MedianNode::new)
+                .register(studio.nodes.filter.BinomialBlurNode.TYPE_ID,
+                          studio.nodes.filter.BinomialBlurNode::new)
                 // Anti-aliasing
                 .register(studio.nodes.aa.FxaaNode.TYPE_ID,
                           studio.nodes.aa.FxaaNode::new)

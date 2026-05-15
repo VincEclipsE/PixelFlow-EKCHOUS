@@ -34,6 +34,11 @@ public final class PftoolWriter {
 
     public static PftoolJson build(String typeId, String name, String category,
                                    String description, Graph subgraph) {
+        return build(typeId, name, category, description, subgraph, Exposure.allOf(subgraph));
+    }
+
+    public static PftoolJson build(String typeId, String name, String category,
+                                   String description, Graph subgraph, Exposure exposure) {
         PftoolJson out = new PftoolJson();
         out.typeId = typeId;
         out.name = name;
@@ -41,47 +46,41 @@ public final class PftoolWriter {
         out.description = description;
         out.createdAt = Instant.now().toString();
 
-        // -------- Inputs: every inner GraphInputNode becomes an exposed input --------
-        List<String> boundaryIds = new ArrayList<>();
+        // -------- Inputs: every selected GraphInputNode becomes an exposed input --------
         for (Node n : subgraph.nodes()) {
-            if (n.typeId().equals(studio.nodes.builtin.GraphInputNode.TYPE_ID)) {
-                boundaryIds.add(n.id().value);
-                PftoolJson.ExposedInput ei = new PftoolJson.ExposedInput();
-                ei.alias = n.label();
-                ei.type = "tex2d";
-                ei.innerNodeId = n.id().value;
-                out.iface.inputs.add(ei);
-            }
+            if (!n.typeId().equals(studio.nodes.builtin.GraphInputNode.TYPE_ID)) continue;
+            if (!exposure.includedInputs.contains(n.id().value)) continue;
+            PftoolJson.ExposedInput ei = new PftoolJson.ExposedInput();
+            ei.alias = n.label();
+            ei.type = "tex2d";
+            ei.innerNodeId = n.id().value;
+            out.iface.inputs.add(ei);
         }
 
-        // -------- Outputs: every inner GraphOutputNode's input becomes an output --------
-        List<String> graphOutputIds = new ArrayList<>();
+        // -------- Outputs: each selected GraphOutputNode's incoming edge --------
         for (Node n : subgraph.nodes()) {
-            if (n.typeId().equals(studio.nodes.builtin.GraphOutputNode.TYPE_ID)) {
-                graphOutputIds.add(n.id().value);
-                // GraphOutputNode has a single input "in" of type tex2d.
-                // We expose the edge that feeds it.
-                Edge e = null;
-                for (Edge candidate : subgraph.edges()) {
-                    if (candidate.to.owner == n) { e = candidate; break; }
-                }
-                if (e == null) continue;
-                PftoolJson.ExposedOutput eo = new PftoolJson.ExposedOutput();
-                eo.alias = n.label();
-                eo.type = e.from.type.id;
-                eo.innerNodeId = e.from.owner.id().value;
-                eo.innerPortName = e.from.name;
-                out.iface.outputs.add(eo);
+            if (!n.typeId().equals(studio.nodes.builtin.GraphOutputNode.TYPE_ID)) continue;
+            if (!exposure.includedOutputs.contains(n.id().value)) continue;
+            Edge e = null;
+            for (Edge candidate : subgraph.edges()) {
+                if (candidate.to.owner == n) { e = candidate; break; }
             }
+            if (e == null) continue;
+            PftoolJson.ExposedOutput eo = new PftoolJson.ExposedOutput();
+            eo.alias = n.label();
+            eo.type = e.from.type.id;
+            eo.innerNodeId = e.from.owner.id().value;
+            eo.innerPortName = e.from.name;
+            out.iface.outputs.add(eo);
         }
 
-        // -------- Params: prefix each by inner node label --------
+        // -------- Params: only the ones the user picked --------
         for (Node n : subgraph.nodes()) {
-            if (graphOutputIds.contains(n.id().value)) continue; // skip output boundary nodes
-            if (boundaryIds.contains(n.id().value)) continue;    // skip input boundary nodes
             for (Parameter<?> p : n.parameters()) {
+                Exposure.ParamKey key = new Exposure.ParamKey(n.id().value, p.name);
+                if (!exposure.includedParams.contains(key)) continue;
                 PftoolJson.ExposedParam ep = new PftoolJson.ExposedParam();
-                ep.alias = n.label() + "." + p.name;
+                ep.alias = exposure.aliasOf(key, n.label() + "." + p.name);
                 ep.type = p.type.id;
                 ep.uiHint = p.uiHint != null ? p.uiHint.name() : null;
                 ep.defaultValue = jsonifyValue(p.defaultValue);
@@ -125,6 +124,11 @@ public final class PftoolWriter {
     public static void write(Path file, String typeId, String name, String category,
                              String description, Graph subgraph) throws IOException {
         JsonCodec.write(file, build(typeId, name, category, description, subgraph));
+    }
+
+    public static void write(Path file, String typeId, String name, String category,
+                             String description, Graph subgraph, Exposure exposure) throws IOException {
+        JsonCodec.write(file, build(typeId, name, category, description, subgraph, exposure));
     }
 
     private static Object jsonifyValue(Object v) {
