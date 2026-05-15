@@ -15,11 +15,13 @@ import studio.graph.Frame;
 import studio.graph.Graph;
 import studio.graph.GraphContext;
 import studio.graph.GraphRuntime;
+import studio.graph.InputPort;
 import studio.graph.Node;
 import studio.graph.OutputPort;
 import studio.graph.Parameter;
 import studio.graph.PortType;
 import studio.graph.PortTypes;
+import studio.nodes.builtin.GraphInputNode;
 import studio.save.PftoolJson;
 
 /**
@@ -47,15 +49,18 @@ public final class CompoundNode extends AbstractNode {
     private final String typeId;
     private final PftoolJson descriptor;
     private final Graph inner;
-    private final Map<String, Node> innerById;          // inner node id → inner node
-    private final List<OutputBinding> outputBindings;   // outer-output → inner-output port
-    private final List<ParamBinding> paramBindings;     // outer-param → inner-param
+    private final Map<String, Node> innerById;
+    private final List<InputBinding> inputBindings;
+    private final List<OutputBinding> outputBindings;
+    private final List<ParamBinding> paramBindings;
 
     private GraphRuntime innerRuntime;
-    private GraphOutputCapture[] innerOutputCaptures;   // shadow nodes that capture inner output values
+    private GraphOutputCapture[] innerOutputCaptures;
 
+    @SuppressWarnings({"rawtypes", "unchecked"})
     private CompoundNode(String typeId, PftoolJson descriptor, Graph inner,
                          Map<String, Node> innerById,
+                         List<InputBinding> inputBindings,
                          List<OutputBinding> outputBindings,
                          List<ParamBinding> paramBindings) {
         super();
@@ -63,11 +68,14 @@ public final class CompoundNode extends AbstractNode {
         this.descriptor = descriptor;
         this.inner = inner;
         this.innerById = innerById;
+        this.inputBindings = inputBindings;
         this.outputBindings = outputBindings;
         this.paramBindings = paramBindings;
 
+        for (InputBinding ib : inputBindings) {
+            ib.outerPort = declareInput(ib.alias, (PortType) ib.innerNode.out.type, false);
+        }
         for (OutputBinding ob : outputBindings) {
-            // The outer port shares the inner port's type for v1.
             ob.outerPort = declareOutput(ob.alias, (PortType) ob.innerPort.type);
         }
         for (ParamBinding pb : paramBindings) {
@@ -114,10 +122,16 @@ public final class CompoundNode extends AbstractNode {
             forwardParam(pb);
         }
 
-        // 2) Drive the inner graph one tick.
+        // 2) Inject outer-input values into the boundary GraphInputNodes.
+        for (InputBinding ib : inputBindings) {
+            Object outerValue = readUnchecked(outerFrame, ib.outerPort);
+            ib.innerNode.inject(outerValue instanceof RenderTarget rt ? rt : null);
+        }
+
+        // 3) Drive the inner graph one tick.
         innerRuntime.renderFrame();
 
-        // 3) Publish each exposed inner output as our own outer output.
+        // 4) Publish each exposed inner output as our own outer output.
         for (int i = 0; i < outputBindings.size(); i++) {
             OutputBinding ob = outputBindings.get(i);
             Object value = innerOutputCaptures[i].lastValue;
@@ -130,6 +144,11 @@ public final class CompoundNode extends AbstractNode {
     @SuppressWarnings({"rawtypes", "unchecked"})
     private static void publishUnchecked(Frame frame, OutputPort port, Object value) {
         frame.publish(port, value);
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private static Object readUnchecked(Frame frame, InputPort port) {
+        return frame.read(port);
     }
 
     @Override public void dispose(GraphContext ctx) {
@@ -158,6 +177,22 @@ public final class CompoundNode extends AbstractNode {
      */
     public static CompoundNode build(String typeId, PftoolJson descriptor,
                                      Graph inner, Map<String, Node> innerById) {
+        // Bind inputs (boundary GraphInputNodes in the subgraph).
+        List<InputBinding> inputs = new ArrayList<>();
+        if (descriptor.iface != null && descriptor.iface.inputs != null) {
+            for (PftoolJson.ExposedInput ei : descriptor.iface.inputs) {
+                Node inn = innerById.get(ei.innerNodeId);
+                if (!(inn instanceof GraphInputNode boundary)) {
+                    throw new IllegalArgumentException(
+                            "compound input '" + ei.alias + "' references non-GraphInput node: " + ei.innerNodeId);
+                }
+                InputBinding ib = new InputBinding();
+                ib.alias = ei.alias;
+                ib.innerNode = boundary;
+                inputs.add(ib);
+            }
+        }
+
         // Bind outputs.
         List<OutputBinding> outputs = new ArrayList<>();
         if (descriptor.iface != null && descriptor.iface.outputs != null) {
@@ -199,13 +234,19 @@ public final class CompoundNode extends AbstractNode {
             }
         }
 
-        return new CompoundNode(typeId, descriptor, inner, innerById, outputs, params);
+        return new CompoundNode(typeId, descriptor, inner, innerById, inputs, outputs, params);
     }
 
     /** Look up the inner Node by its descriptor id. Useful for tests / introspection. */
     public Node innerNode(String id) { return innerById.get(id); }
 
     /* ------------------------------ helpers ------------------------------ */
+
+    private static final class InputBinding {
+        String alias;
+        GraphInputNode innerNode;
+        InputPort<?> outerPort;    // populated in ctor
+    }
 
     private static final class OutputBinding {
         String alias;

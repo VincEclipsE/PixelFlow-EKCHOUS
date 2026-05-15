@@ -97,9 +97,13 @@ public final class MainFrame extends JFrame {
 
         editor.addSelectionListener(n -> parameters.setActiveNode(n));
 
+        // Hot-reload: watch tools/ for .pftool changes, refresh the palette.
+        toolsLibrary.startWatcher(() -> SwingUtilities.invokeLater(palette::reload));
+
         addWindowListener(new WindowAdapter() {
             @Override public void windowClosing(WindowEvent e) {
                 preview.shutdown();
+                toolsLibrary.stopWatcher();
             }
         });
 

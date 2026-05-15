@@ -31,8 +31,15 @@ public final class PftoolJson {
     public Subgraph subgraph = new Subgraph();
 
     public static final class InterfaceSection {
+        public List<ExposedInput>  inputs  = new ArrayList<>();
         public List<ExposedOutput> outputs = new ArrayList<>();
         public List<ExposedParam>  params  = new ArrayList<>();
+    }
+
+    public static final class ExposedInput {
+        public String alias;          // outer port name
+        public String type;           // PortType.id
+        public String innerNodeId;    // GraphInputNode in the subgraph whose .out drives this
     }
 
     public static final class ExposedOutput {

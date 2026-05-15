@@ -41,6 +41,19 @@ public final class PftoolWriter {
         out.description = description;
         out.createdAt = Instant.now().toString();
 
+        // -------- Inputs: every inner GraphInputNode becomes an exposed input --------
+        List<String> boundaryIds = new ArrayList<>();
+        for (Node n : subgraph.nodes()) {
+            if (n.typeId().equals(studio.nodes.builtin.GraphInputNode.TYPE_ID)) {
+                boundaryIds.add(n.id().value);
+                PftoolJson.ExposedInput ei = new PftoolJson.ExposedInput();
+                ei.alias = n.label();
+                ei.type = "tex2d";
+                ei.innerNodeId = n.id().value;
+                out.iface.inputs.add(ei);
+            }
+        }
+
         // -------- Outputs: every inner GraphOutputNode's input becomes an output --------
         List<String> graphOutputIds = new ArrayList<>();
         for (Node n : subgraph.nodes()) {
@@ -64,7 +77,8 @@ public final class PftoolWriter {
 
         // -------- Params: prefix each by inner node label --------
         for (Node n : subgraph.nodes()) {
-            if (graphOutputIds.contains(n.id().value)) continue; // skip boundary nodes
+            if (graphOutputIds.contains(n.id().value)) continue; // skip output boundary nodes
+            if (boundaryIds.contains(n.id().value)) continue;    // skip input boundary nodes
             for (Parameter<?> p : n.parameters()) {
                 PftoolJson.ExposedParam ep = new PftoolJson.ExposedParam();
                 ep.alias = n.label() + "." + p.name;
