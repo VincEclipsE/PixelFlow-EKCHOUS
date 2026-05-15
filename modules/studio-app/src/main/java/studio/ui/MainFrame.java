@@ -268,6 +268,7 @@ public final class MainFrame extends JFrame {
                   Shift+click          Add/remove from selection
                   Left-drag empty      Marquee select
                   Ctrl+A               Select all
+                  Shift+A              Quick-add tool (fuzzy palette)
                   Delete               Remove selected
                   M                    Mute / unmute selected
                   Ctrl+D               Duplicate selected

@@ -33,6 +33,7 @@ import java.util.Map;
 import java.util.function.Consumer;
 
 import javax.swing.JPanel;
+import javax.swing.SwingUtilities;
 
 import studio.graph.Edge;
 import studio.graph.InputPort;
@@ -170,6 +171,10 @@ public final class NodeEditorPanel extends JPanel {
                     if (current != null) setMultiSelection(current.graph.nodes());
                     return;
                 }
+                if (e.isShiftDown() && code == KeyEvent.VK_A) {
+                    showQuickAdd();
+                    return;
+                }
                 if (selected == null || current == null) return;
                 if (code == KeyEvent.VK_DELETE) {
                     deleteSelected();
@@ -236,6 +241,23 @@ public final class NodeEditorPanel extends JPanel {
         if (current == null) return;
         autoLayout(current);
         repaint();
+    }
+
+    private void showQuickAdd() {
+        if (current == null) return;
+        java.awt.Frame owner = (java.awt.Frame) SwingUtilities.getWindowAncestor(this);
+        java.util.List<String> ids = new java.util.ArrayList<>(registry.typeIds());
+        java.util.Collections.sort(ids);
+        QuickAddOverlay.show(owner, ids, typeId -> {
+            Node added = registry.create(typeId);
+            // Drop at the canvas centre in world space
+            double cx = (getWidth()  / 2.0 - panX) / zoom;
+            double cy = (getHeight() / 2.0 - panY) / zoom;
+            int nx = (int) Math.round(cx - NODE_WIDTH / 2.0);
+            int ny = (int) Math.round(cy - NODE_HEADER / 2.0);
+            doAddNode(added, nx, ny);
+            setSelection(added);
+        });
     }
 
     /** Centre the viewport on the graph's bounding box, zoomed to fit. */

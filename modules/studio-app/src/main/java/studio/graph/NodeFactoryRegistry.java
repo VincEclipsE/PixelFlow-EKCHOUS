@@ -1,8 +1,10 @@
 package studio.graph;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.function.Supplier;
 
 /**
@@ -31,5 +33,10 @@ public final class NodeFactoryRegistry {
 
     public boolean has(String typeId) {
         return factories.containsKey(typeId);
+    }
+
+    /** Read-only view of every registered typeId, in insertion order is not guaranteed. */
+    public Set<String> typeIds() {
+        return Collections.unmodifiableSet(factories.keySet());
     }
 }
