@@ -108,6 +108,9 @@ public final class NodeEditorPanel extends JPanel {
     public void setOnMutate(Runnable r) { this.onMutate = r; }
     private void fireOnMutate() { if (onMutate != null) onMutate.run(); }
 
+    private Runnable onSpaceToggle;
+    public void setOnSpaceToggle(Runnable r) { this.onSpaceToggle = r; }
+
     public void undo() {
         var c = undo.undo();
         if (c != null) {
@@ -174,6 +177,11 @@ public final class NodeEditorPanel extends JPanel {
                 }
                 if (e.isShiftDown() && code == KeyEvent.VK_A) {
                     showQuickAdd();
+                    return;
+                }
+                if (code == KeyEvent.VK_SPACE) {
+                    Runnable r = onSpaceToggle;
+                    if (r != null) r.run();
                     return;
                 }
                 if (selected == null || current == null) return;

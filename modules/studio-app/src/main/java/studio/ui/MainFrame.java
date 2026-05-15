@@ -55,6 +55,7 @@ public final class MainFrame extends JFrame {
     private final NodeFactoryRegistry registry;
     private final ToolsLibrary toolsLibrary;
     private final StatusBar statusBar;
+    private final PreviewToolbar previewToolbar;
     private final RecentProjects recent = new RecentProjects();
     private JMenu recentMenu;
 
@@ -76,11 +77,13 @@ public final class MainFrame extends JFrame {
         this.parameters = new ParameterPanel(model);
         this.palette = new ToolPalette(registry, toolsLibrary);
         this.statusBar = new StatusBar();
+        this.previewToolbar = new PreviewToolbar(preview, statusBar);
         this.editor.setStatusBar(statusBar);
         this.preview.setStatusBar(statusBar);
         this.editor.setOnMutate(parameters::refresh);
         this.parameters.setOnLabelChange(() -> { editor.repaint(); model.markDirty(); });
         this.editor.undoStack().setOnMutate(model::markDirty);
+        this.editor.setOnSpaceToggle(previewToolbar::togglePlay);
         this.model.setDirtyListener(this::refreshTitle);
 
         JSplitPane center = new JSplitPane(JSplitPane.VERTICAL_SPLIT, editor, preview);
@@ -96,6 +99,7 @@ public final class MainFrame extends JFrame {
         root.setDividerLocation(220);
 
         setLayout(new BorderLayout());
+        add(previewToolbar, BorderLayout.NORTH);
         add(root, BorderLayout.CENTER);
         add(statusBar, BorderLayout.SOUTH);
 
@@ -312,6 +316,9 @@ public final class MainFrame extends JFrame {
                 Editing
                   Ctrl+Z               Undo
                   Ctrl+Y / Ctrl+Shift+Z  Redo
+
+                Preview
+                  Space                Pause / resume simulation
 
                 File
                   Ctrl+O   Open       Ctrl+S   Save

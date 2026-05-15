@@ -54,6 +54,7 @@ public final class GLPreviewPanel extends JPanel {
     private DwPixelFlow ctx;
     private GraphRuntime runtime;
     private GraphOutputNode rootOutput;
+    private PflowReader.Result lastLoaded;
 
     @SuppressWarnings("unused")
     private final StudioModel model;
@@ -104,6 +105,17 @@ public final class GLPreviewPanel extends JPanel {
         canvas.destroy();
     }
 
+    private volatile boolean paused;
+    private final java.util.concurrent.atomic.AtomicInteger pendingSteps = new java.util.concurrent.atomic.AtomicInteger();
+    private final java.util.concurrent.atomic.AtomicBoolean resetPending = new java.util.concurrent.atomic.AtomicBoolean();
+
+    public boolean isPaused() { return paused; }
+    public void setPaused(boolean p) { this.paused = p; }
+    /** Advance the runtime by one frame on the next display(), regardless of paused state. */
+    public void stepOnce() { pendingSteps.incrementAndGet(); canvas.repaint(); }
+    /** Recreate the runtime so the simulation restarts from frame 0 on the next display(). */
+    public void resetRuntime() { resetPending.set(true); canvas.repaint(); }
+
     /* ------------------------------ GLEventListener ------------------------------ */
 
     private final class Listener implements GLEventListener {
@@ -125,11 +137,18 @@ public final class GLPreviewPanel extends JPanel {
         @Override public void display(GLAutoDrawable d) {
             PflowReader.Result pending = pendingProject.getAndSet(null);
             if (pending != null) swapProject(pending);
+            if (resetPending.compareAndSet(true, false) && lastLoaded != null) {
+                swapProject(lastLoaded);
+            }
             if (runtime == null) {
                 clearToBackdrop(d.getGL().getGL2ES2());
                 return;
             }
-            runtime.renderFrame();
+            int steps = pendingSteps.getAndSet(0);
+            if (!paused || steps > 0) {
+                int count = paused ? steps : (1 + Math.max(0, steps));
+                for (int i = 0; i < count; i++) runtime.renderFrame();
+            }
 
             if (rootOutput != null) {
                 RenderTarget rt = rootOutput.lastFrame();
@@ -177,6 +196,7 @@ public final class GLPreviewPanel extends JPanel {
             if (runtime != null) runtime.dispose();
             runtime = new GraphRuntime(loaded.graph, new GraphContext(ctx));
             rootOutput = pickRootOutput(loaded);
+            lastLoaded = loaded;
         }
 
         private GraphOutputNode pickRootOutput(PflowReader.Result loaded) {
