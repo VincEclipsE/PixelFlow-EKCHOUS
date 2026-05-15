@@ -20,8 +20,10 @@ import javax.swing.KeyStroke;
 import javax.swing.SwingUtilities;
 import javax.swing.filechooser.FileNameExtensionFilter;
 
+import studio.graph.NodeFactoryRegistry;
 import studio.headless.HeadlessSmoke;
 import studio.save.PflowReader;
+import studio.save.ToolsLibrary;
 
 /**
  * Top-level Studio window. M3 v1 layout:
@@ -49,6 +51,8 @@ public final class MainFrame extends JFrame {
     private final GLPreviewPanel preview;
     private final ParameterPanel parameters;
     private final StudioModel model;
+    private final NodeFactoryRegistry registry;
+    private final ToolsLibrary toolsLibrary;
 
     public MainFrame() {
         super("PixelFlow Studio");
@@ -56,13 +60,17 @@ public final class MainFrame extends JFrame {
         setSize(1480, 880);
         setLocationByPlatform(true);
 
-        PflowReader reader = new PflowReader(HeadlessSmoke.defaultRegistry());
+        this.registry = HeadlessSmoke.defaultRegistry();
+        this.toolsLibrary = new ToolsLibrary(Paths.get("tools"), registry);
+        this.toolsLibrary.rescan();
+
+        PflowReader reader = new PflowReader(registry);
         this.model = new StudioModel(reader);
 
-        this.editor = new NodeEditorPanel(HeadlessSmoke.defaultRegistry());
+        this.editor = new NodeEditorPanel(registry);
         this.preview = new GLPreviewPanel(model);
         this.parameters = new ParameterPanel(model);
-        this.palette = new ToolPalette(HeadlessSmoke.defaultRegistry());
+        this.palette = new ToolPalette(registry, toolsLibrary);
 
         JSplitPane center = new JSplitPane(JSplitPane.VERTICAL_SPLIT, editor, preview);
         center.setResizeWeight(0.55);
@@ -113,6 +121,30 @@ public final class MainFrame extends JFrame {
         fileMenu.add(reload);
 
         fileMenu.addSeparator();
+        JMenuItem save = new JMenuItem("Save");
+        save.setAccelerator(KeyStroke.getKeyStroke("ctrl S"));
+        save.addActionListener(e -> saveProject());
+        fileMenu.add(save);
+
+        JMenuItem saveAs = new JMenuItem("Save As…");
+        saveAs.setAccelerator(KeyStroke.getKeyStroke("ctrl shift S"));
+        saveAs.addActionListener(e -> saveProjectAs());
+        fileMenu.add(saveAs);
+
+        JMenuItem saveAsTool = new JMenuItem("Save as Tool…");
+        saveAsTool.setAccelerator(KeyStroke.getKeyStroke("ctrl T"));
+        saveAsTool.addActionListener(e -> {
+            String id = SaveAsToolDialog.run(this, model, toolsLibrary);
+            if (id != null) {
+                palette.reload();
+                JOptionPane.showMessageDialog(this,
+                        "Saved tool '" + id + "'. It now appears in the palette.",
+                        "Save as Tool", JOptionPane.INFORMATION_MESSAGE);
+            }
+        });
+        fileMenu.add(saveAsTool);
+
+        fileMenu.addSeparator();
         JMenuItem exit = new JMenuItem("Exit");
         exit.addActionListener(e -> dispatchEvent(new WindowEvent(this, WindowEvent.WINDOW_CLOSING)));
         fileMenu.add(exit);
@@ -154,5 +186,42 @@ public final class MainFrame extends JFrame {
                         "Open error", JOptionPane.ERROR_MESSAGE);
             }
         });
+    }
+
+    private void saveProject() {
+        if (model.currentPath() == null) { saveProjectAs(); return; }
+        try {
+            model.save();
+            setTitle("PixelFlow Studio — " + model.currentPath());
+        } catch (IOException ex) {
+            JOptionPane.showMessageDialog(this,
+                    "Failed to save: " + ex.getMessage(),
+                    "Save error", JOptionPane.ERROR_MESSAGE);
+        }
+    }
+
+    private void saveProjectAs() {
+        JFileChooser chooser = new JFileChooser();
+        chooser.setFileFilter(new FileNameExtensionFilter("PixelFlow project (*.pflow)", "pflow"));
+        if (model.currentPath() != null) {
+            chooser.setSelectedFile(model.currentPath().toFile());
+        } else {
+            chooser.setCurrentDirectory(new File("."));
+            chooser.setSelectedFile(new File("untitled.pflow"));
+        }
+        int rval = chooser.showSaveDialog(this);
+        if (rval != JFileChooser.APPROVE_OPTION) return;
+        File f = chooser.getSelectedFile();
+        if (!f.getName().toLowerCase().endsWith(".pflow")) {
+            f = new File(f.getParentFile(), f.getName() + ".pflow");
+        }
+        try {
+            model.saveAs(f.toPath());
+            setTitle("PixelFlow Studio — " + f.toPath());
+        } catch (IOException ex) {
+            JOptionPane.showMessageDialog(this,
+                    "Failed to save: " + ex.getMessage(),
+                    "Save error", JOptionPane.ERROR_MESSAGE);
+        }
     }
 }

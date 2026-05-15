@@ -5,8 +5,8 @@ import java.awt.datatransfer.DataFlavor;
 import java.awt.datatransfer.StringSelection;
 import java.awt.datatransfer.Transferable;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
+import java.util.TreeSet;
 
 import javax.swing.BorderFactory;
 import javax.swing.DefaultListModel;
@@ -22,24 +22,27 @@ import studio.graph.NodeFactoryRegistry;
 import studio.nodes.builtin.GraphOutputNode;
 import studio.nodes.filter.BloomNode;
 import studio.nodes.fluid.FluidNode;
+import studio.save.ToolsLibrary;
 
 /**
  * Tool palette. Lists registered node typeIds; the user can drag an entry
  * onto the {@link NodeEditorPanel} to add a new node to the current graph.
+ * After {@link #reload()} the list re-syncs with the registry + tools
+ * library (used after a Save-as-Tool).
  */
 public final class ToolPalette extends JPanel {
 
-    /** Custom data flavor used to identify palette drags. */
     public static final DataFlavor TYPE_ID_FLAVOR = new DataFlavor(String.class, "studio/typeId");
 
-    public ToolPalette(NodeFactoryRegistry registry) {
-        super(new BorderLayout());
-        setBorder(BorderFactory.createTitledBorder("Tools"));
+    private final NodeFactoryRegistry registry;
+    private final ToolsLibrary toolsLibrary;
+    private final DefaultListModel<String> model = new DefaultListModel<>();
 
-        DefaultListModel<String> model = new DefaultListModel<>();
-        for (String id : knownTypeIds()) {
-            if (registry.has(id)) model.addElement(id);
-        }
+    public ToolPalette(NodeFactoryRegistry registry, ToolsLibrary toolsLibrary) {
+        super(new BorderLayout());
+        this.registry = registry;
+        this.toolsLibrary = toolsLibrary;
+        setBorder(BorderFactory.createTitledBorder("Tools"));
 
         JList<String> list = new JList<>(model);
         list.setVisibleRowCount(20);
@@ -60,14 +63,30 @@ public final class ToolPalette extends JPanel {
         JLabel hint = new JLabel("Drag a tool onto the canvas");
         hint.setBorder(BorderFactory.createEmptyBorder(4, 6, 4, 6));
         add(hint, BorderLayout.SOUTH);
+
+        reload();
     }
 
-    private static List<String> knownTypeIds() {
+    /** Refresh the displayed list from the registry + tools library. */
+    public void reload() {
+        model.clear();
+        TreeSet<String> ids = new TreeSet<>();
+        // Built-in primitives
+        for (String id : builtinTypeIds()) {
+            if (registry.has(id)) ids.add(id);
+        }
+        // User-saved tools from the ToolsLibrary
+        if (toolsLibrary != null) {
+            ids.addAll(toolsLibrary.registeredTypeIds());
+        }
+        for (String id : ids) model.addElement(id);
+    }
+
+    private static List<String> builtinTypeIds() {
         List<String> ids = new ArrayList<>();
         ids.add(FluidNode.TYPE_ID);
         ids.add(BloomNode.TYPE_ID);
         ids.add(GraphOutputNode.TYPE_ID);
-        Collections.sort(ids);
         return ids;
     }
 }
