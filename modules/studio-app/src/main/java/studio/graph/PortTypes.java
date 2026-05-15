@@ -27,6 +27,8 @@ public final class PortTypes {
     public static final PortType<float[]> VEC3   = new PortType<>("vec3",   float[].class, null);
     public static final PortType<float[]> VEC4   = new PortType<>("vec4",   float[].class, null);
 
+    public static final PortType<String>  STRING = new PortType<>("string", String.class,  null);
+
     private PortTypes() {}
 
     /** Look up a registered PortType by its stable id. Returns null if unknown. */
@@ -41,6 +43,7 @@ public final class PortTypes {
             case "vec2"   -> VEC2;
             case "vec3"   -> VEC3;
             case "vec4"   -> VEC4;
+            case "string" -> STRING;
             default       -> null;
         };
     }

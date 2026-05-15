@@ -122,6 +122,7 @@ public final class ToolPalette extends JPanel {
         ids.add(studio.nodes.aa.FxaaNode.TYPE_ID);
         ids.add(GraphOutputNode.TYPE_ID);
         ids.add(studio.nodes.builtin.GraphInputNode.TYPE_ID);
+        ids.add(studio.nodes.builtin.NoteNode.TYPE_ID);
         return ids;
     }
 }

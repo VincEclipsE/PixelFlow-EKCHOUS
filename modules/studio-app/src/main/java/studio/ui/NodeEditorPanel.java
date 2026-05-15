@@ -276,8 +276,18 @@ public final class NodeEditorPanel extends JPanel {
     }
 
     private int nodeHeight(Node n) {
+        if (n.typeId().equals(studio.nodes.builtin.NoteNode.TYPE_ID)) {
+            studio.graph.Parameter<?> p = n.parameter("text");
+            String text = p == null || p.get() == null ? "" : p.get().toString();
+            int lines = Math.max(1, text.split("\\R").length);
+            return Math.max(NODE_HEADER, 12 + lines * NOTE_LINE);
+        }
         int rows = Math.max(n.inputs().size(), n.outputs().size());
         return NODE_HEADER + Math.max(2, rows) * ROW_HEIGHT + 8;
+    }
+
+    private int nodeWidth(Node n) {
+        return n.typeId().equals(studio.nodes.builtin.NoteNode.TYPE_ID) ? NOTE_WIDTH : NODE_WIDTH;
     }
 
     private Layout layoutOf(Node n) {
@@ -395,6 +405,10 @@ public final class NodeEditorPanel extends JPanel {
     }
 
     private void drawNode(Graphics2D g, Node n) {
+        if (n.typeId().equals(studio.nodes.builtin.NoteNode.TYPE_ID)) {
+            drawNote(g, n);
+            return;
+        }
         Layout L = layoutOf(n);
         int height = nodeHeight(n);
         boolean disabled = !n.isEnabled();
@@ -445,6 +459,35 @@ public final class NodeEditorPanel extends JPanel {
             String label = op.name;
             int sw = g.getFontMetrics().stringWidth(label);
             g.drawString(label, L.x + NODE_WIDTH - 12 - sw, py + 4);
+        }
+    }
+
+    private static final int NOTE_WIDTH = 220;
+    private static final int NOTE_LINE = 16;
+
+    private void drawNote(Graphics2D g, Node n) {
+        Layout L = layoutOf(n);
+        studio.graph.Parameter<?> p = n.parameter("text");
+        String text = p == null || p.get() == null ? "" : p.get().toString();
+        String[] lines = text.isEmpty() ? new String[]{"(empty note)"} : text.split("\\R");
+        int height = Math.max(NODE_HEADER, 12 + lines.length * NOTE_LINE);
+        RoundRectangle2D body = new RoundRectangle2D.Double(L.x, L.y, NOTE_WIDTH, height, 6, 6);
+
+        if (n == selected) {
+            g.setColor(new Color(255, 196, 64, 180));
+            g.setStroke(new BasicStroke(3f));
+            g.draw(new RoundRectangle2D.Double(L.x - 2, L.y - 2, NOTE_WIDTH + 4, height + 4, 8, 8));
+        }
+
+        g.setColor(new Color(218, 200, 110));
+        g.fill(body);
+        g.setColor(new Color(150, 130, 60));
+        g.setStroke(new BasicStroke(1.2f));
+        g.draw(body);
+
+        g.setColor(new Color(40, 30, 10));
+        for (int i = 0; i < lines.length; i++) {
+            g.drawString(lines[i], L.x + 10, L.y + 18 + i * NOTE_LINE);
         }
     }
 
@@ -519,7 +562,8 @@ public final class NodeEditorPanel extends JPanel {
             Node n = nodes.get(i);
             Layout L = layoutOf(n);
             int h = nodeHeight(n);
-            if (world.getX() >= L.x && world.getX() <= L.x + NODE_WIDTH
+            int w = nodeWidth(n);
+            if (world.getX() >= L.x && world.getX() <= L.x + w
                     && world.getY() >= L.y && world.getY() <= L.y + h) {
                 return n;
             }

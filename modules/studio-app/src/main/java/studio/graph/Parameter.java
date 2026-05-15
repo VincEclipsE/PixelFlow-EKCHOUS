@@ -90,4 +90,9 @@ public final class Parameter<T> {
     public static Parameter<float[]> vec4(String name, float[] def) {
         return new Parameter<>(name, PortTypes.VEC4, def);
     }
+    public static Parameter<String> text(String name, String def) {
+        Parameter<String> p = new Parameter<>(name, PortTypes.STRING, def);
+        p.uiHint = UiHint.TEXT;
+        return p;
+    }
 }

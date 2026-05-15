@@ -142,7 +142,9 @@ public final class HeadlessSmoke {
                 // Boundaries
                 .register(GraphOutputNode.TYPE_ID,           GraphOutputNode::new)
                 .register(studio.nodes.builtin.GraphInputNode.TYPE_ID,
-                          studio.nodes.builtin.GraphInputNode::new);
+                          studio.nodes.builtin.GraphInputNode::new)
+                .register(studio.nodes.builtin.NoteNode.TYPE_ID,
+                          studio.nodes.builtin.NoteNode::new);
     }
 
     /**

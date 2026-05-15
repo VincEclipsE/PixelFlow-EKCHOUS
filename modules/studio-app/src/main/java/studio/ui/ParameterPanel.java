@@ -109,6 +109,8 @@ public final class ParameterPanel extends JPanel {
             } else {
                 row.add(buildVecWidget((Parameter<float[]>) p, 4), BorderLayout.CENTER);
             }
+        } else if (p.type == PortTypes.STRING) {
+            row.add(buildStringWidget((Parameter<String>) p), BorderLayout.CENTER);
         } else {
             JLabel placeholder = new JLabel("(unsupported: " + p.type.id + ")");
             placeholder.setForeground(Color.LIGHT_GRAY);
@@ -200,6 +202,17 @@ public final class ParameterPanel extends JPanel {
             catch (NumberFormatException ignored) { out[i] = 0f; }
         }
         p.set(out);
+    }
+
+    private JComponent buildStringWidget(Parameter<String> p) {
+        JTextField tf = new JTextField(p.get() == null ? "" : p.get(), 20);
+        tf.getDocument().addDocumentListener(new javax.swing.event.DocumentListener() {
+            private void push() { p.set(tf.getText()); }
+            @Override public void insertUpdate(javax.swing.event.DocumentEvent e) { push(); }
+            @Override public void removeUpdate(javax.swing.event.DocumentEvent e) { push(); }
+            @Override public void changedUpdate(javax.swing.event.DocumentEvent e) { push(); }
+        });
+        return tf;
     }
 
     private JComponent buildColorWidget(Parameter<float[]> p) {
