@@ -147,6 +147,8 @@ public final class HeadlessSmoke {
                           studio.nodes.filter.DistanceTransformNode::new)
                 .register(studio.nodes.image.HarrisCornerNode.TYPE_ID,
                           studio.nodes.image.HarrisCornerNode::new)
+                .register(studio.nodes.filter.LevelsNode.TYPE_ID,
+                          studio.nodes.filter.LevelsNode::new)
                 // Anti-aliasing
                 .register(studio.nodes.aa.FxaaNode.TYPE_ID,
                           studio.nodes.aa.FxaaNode::new)
