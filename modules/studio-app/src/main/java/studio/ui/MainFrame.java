@@ -254,6 +254,28 @@ public final class MainFrame extends JFrame {
         viewMenu.add(snap);
         bar.add(viewMenu);
 
+        JMenu toolsMenu = new JMenu("Tools");
+        JMenuItem rescanTools = new JMenuItem("Reload Tools Library");
+        rescanTools.addActionListener(e -> {
+            toolsLibrary.rescan();
+            palette.reload();
+            statusBar.info("Tools library reloaded: " + toolsLibrary.registeredTypeIds().size() + " tool(s)");
+        });
+        toolsMenu.add(rescanTools);
+
+        JMenuItem openToolsFolder = new JMenuItem("Open Tools Folder…");
+        openToolsFolder.addActionListener(e -> {
+            try {
+                Path root = toolsLibrary.root().toAbsolutePath();
+                if (!java.nio.file.Files.isDirectory(root)) java.nio.file.Files.createDirectories(root);
+                java.awt.Desktop.getDesktop().open(root.toFile());
+            } catch (Exception ex) {
+                statusBar.error("Open folder failed: " + ex.getMessage());
+            }
+        });
+        toolsMenu.add(openToolsFolder);
+        bar.add(toolsMenu);
+
         JMenu helpMenu = new JMenu("Help");
         JMenuItem keys = new JMenuItem("Keybindings");
         keys.setAccelerator(KeyStroke.getKeyStroke("F1"));
