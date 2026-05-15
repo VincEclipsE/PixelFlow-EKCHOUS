@@ -86,7 +86,15 @@ public final class ToolPalette extends JPanel {
         List<String> ids = new ArrayList<>();
         ids.add(FluidNode.TYPE_ID);
         ids.add(BloomNode.TYPE_ID);
+        ids.add(studio.nodes.filter.GaussianBlurNode.TYPE_ID);
+        ids.add(studio.nodes.filter.SobelNode.TYPE_ID);
+        ids.add(studio.nodes.filter.LuminanceNode.TYPE_ID);
+        ids.add(studio.nodes.filter.BoxBlurNode.TYPE_ID);
+        ids.add(studio.nodes.filter.GammaNode.TYPE_ID);
+        ids.add(studio.nodes.filter.LuminanceThresholdNode.TYPE_ID);
+        ids.add(studio.nodes.aa.FxaaNode.TYPE_ID);
         ids.add(GraphOutputNode.TYPE_ID);
+        ids.add(studio.nodes.builtin.GraphInputNode.TYPE_ID);
         return ids;
     }
 }

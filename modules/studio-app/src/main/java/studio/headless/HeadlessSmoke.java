@@ -112,9 +112,29 @@ public final class HeadlessSmoke {
 
     public static NodeFactoryRegistry defaultRegistry() {
         return new NodeFactoryRegistry()
-                .register(FluidNode.TYPE_ID,        FluidNode::new)
-                .register(BloomNode.TYPE_ID,        BloomNode::new)
-                .register(GraphOutputNode.TYPE_ID,  GraphOutputNode::new);
+                // Sources
+                .register(FluidNode.TYPE_ID,                 FluidNode::new)
+                // Filters
+                .register(BloomNode.TYPE_ID,                 BloomNode::new)
+                .register(studio.nodes.filter.GaussianBlurNode.TYPE_ID,
+                          studio.nodes.filter.GaussianBlurNode::new)
+                .register(studio.nodes.filter.SobelNode.TYPE_ID,
+                          studio.nodes.filter.SobelNode::new)
+                .register(studio.nodes.filter.LuminanceNode.TYPE_ID,
+                          studio.nodes.filter.LuminanceNode::new)
+                .register(studio.nodes.filter.BoxBlurNode.TYPE_ID,
+                          studio.nodes.filter.BoxBlurNode::new)
+                .register(studio.nodes.filter.GammaNode.TYPE_ID,
+                          studio.nodes.filter.GammaNode::new)
+                .register(studio.nodes.filter.LuminanceThresholdNode.TYPE_ID,
+                          studio.nodes.filter.LuminanceThresholdNode::new)
+                // Anti-aliasing
+                .register(studio.nodes.aa.FxaaNode.TYPE_ID,
+                          studio.nodes.aa.FxaaNode::new)
+                // Boundaries
+                .register(GraphOutputNode.TYPE_ID,           GraphOutputNode::new)
+                .register(studio.nodes.builtin.GraphInputNode.TYPE_ID,
+                          studio.nodes.builtin.GraphInputNode::new);
     }
 
     /**

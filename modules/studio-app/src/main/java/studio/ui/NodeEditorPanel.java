@@ -82,6 +82,9 @@ public final class NodeEditorPanel extends JPanel {
     private Point2D wireDragCurrent;        // current mouse position in graph space
 
     private final NodeFactoryRegistry registry;
+    private StatusBar statusBar;
+
+    public void setStatusBar(StatusBar bar) { this.statusBar = bar; }
 
     public NodeEditorPanel(NodeFactoryRegistry registry) {
         this.registry = registry;
@@ -260,22 +263,35 @@ public final class NodeEditorPanel extends JPanel {
         // Inputs (left)
         List<InputPort<?>> inputs = n.inputs();
         for (int i = 0; i < inputs.size(); i++) {
+            InputPort<?> ip = inputs.get(i);
             int py = L.y + NODE_HEADER + ROW_HEIGHT / 2 + i * ROW_HEIGHT;
-            drawPort(g, L.x, py, false);
+            drawPort(g, L.x, py, portColor(ip.type));
             g.setColor(new Color(180, 180, 190));
-            g.drawString(inputs.get(i).name, L.x + 12, py + 4);
+            g.drawString(ip.name, L.x + 12, py + 4);
         }
 
         // Outputs (right)
         List<OutputPort<?>> outputs = n.outputs();
         for (int i = 0; i < outputs.size(); i++) {
+            OutputPort<?> op = outputs.get(i);
             int py = L.y + NODE_HEADER + ROW_HEIGHT / 2 + i * ROW_HEIGHT;
-            drawPort(g, L.x + NODE_WIDTH, py, true);
+            drawPort(g, L.x + NODE_WIDTH, py, portColor(op.type));
             g.setColor(new Color(180, 180, 190));
-            String label = outputs.get(i).name;
+            String label = op.name;
             int sw = g.getFontMetrics().stringWidth(label);
             g.drawString(label, L.x + NODE_WIDTH - 12 - sw, py + 4);
         }
+    }
+
+    private Color portColor(studio.graph.PortType<?> type) {
+        if (type == studio.graph.PortTypes.TEXTURE2D) return new Color(120, 200, 200);
+        if (type == studio.graph.PortTypes.SCALAR
+         || type == studio.graph.PortTypes.INT)      return new Color(220, 200, 100);
+        if (type == studio.graph.PortTypes.BOOL)      return new Color(180, 130, 200);
+        if (type == studio.graph.PortTypes.VEC2
+         || type == studio.graph.PortTypes.VEC3
+         || type == studio.graph.PortTypes.VEC4)     return new Color(120, 160, 220);
+        return new Color(160, 160, 170);
     }
 
     private Color headerColor(Node n) {
@@ -287,11 +303,11 @@ public final class NodeEditorPanel extends JPanel {
         return new Color(80, 80, 100);
     }
 
-    private void drawPort(Graphics2D g, int cx, int cy, boolean output) {
-        g.setColor(new Color(120, 200, 200));
+    private void drawPort(Graphics2D g, int cx, int cy, Color fill) {
+        g.setColor(fill);
         g.fill(new Ellipse2D.Double(cx - PORT_RADIUS, cy - PORT_RADIUS,
                 PORT_RADIUS * 2, PORT_RADIUS * 2));
-        g.setColor(new Color(60, 120, 120));
+        g.setColor(fill.darker());
         g.draw(new Ellipse2D.Double(cx - PORT_RADIUS, cy - PORT_RADIUS,
                 PORT_RADIUS * 2, PORT_RADIUS * 2));
     }
@@ -454,8 +470,13 @@ public final class NodeEditorPanel extends JPanel {
                 if (dst != null && current != null) {
                     try {
                         current.graph.connect(wireFromPort, dst);
+                        if (statusBar != null) {
+                            statusBar.info("Connected " + wireFromPort.owner.label() + "." + wireFromPort.name
+                                    + " → " + dst.owner.label() + "." + dst.name);
+                        }
                     } catch (IllegalArgumentException ex) {
-                        System.err.println("connect failed: " + ex.getMessage());
+                        if (statusBar != null) statusBar.error("Connect failed: " + ex.getMessage());
+                        else System.err.println("connect failed: " + ex.getMessage());
                     }
                 }
                 wireFromPort = null;

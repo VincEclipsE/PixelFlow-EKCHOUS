@@ -53,6 +53,7 @@ public final class MainFrame extends JFrame {
     private final StudioModel model;
     private final NodeFactoryRegistry registry;
     private final ToolsLibrary toolsLibrary;
+    private final StatusBar statusBar;
 
     public MainFrame() {
         super("PixelFlow Studio");
@@ -71,6 +72,8 @@ public final class MainFrame extends JFrame {
         this.preview = new GLPreviewPanel(model);
         this.parameters = new ParameterPanel(model);
         this.palette = new ToolPalette(registry, toolsLibrary);
+        this.statusBar = new StatusBar();
+        this.editor.setStatusBar(statusBar);
 
         JSplitPane center = new JSplitPane(JSplitPane.VERTICAL_SPLIT, editor, preview);
         center.setResizeWeight(0.55);
@@ -86,6 +89,7 @@ public final class MainFrame extends JFrame {
 
         setLayout(new BorderLayout());
         add(root, BorderLayout.CENTER);
+        add(statusBar, BorderLayout.SOUTH);
 
         setJMenuBar(buildMenuBar());
 
@@ -93,12 +97,18 @@ public final class MainFrame extends JFrame {
             preview.attachRuntime(loaded);
             editor.attachGraph(loaded);
             parameters.attachGraph(loaded);
+            statusBar.info("Loaded " + loaded.graph.nodes().size() + " nodes, "
+                    + loaded.graph.edges().size() + " edges from "
+                    + (model.currentPath() != null ? model.currentPath().getFileName() : "memory"));
         });
 
         editor.addSelectionListener(n -> parameters.setActiveNode(n));
 
         // Hot-reload: watch tools/ for .pftool changes, refresh the palette.
-        toolsLibrary.startWatcher(() -> SwingUtilities.invokeLater(palette::reload));
+        toolsLibrary.startWatcher(() -> SwingUtilities.invokeLater(() -> {
+            palette.reload();
+            statusBar.info("Tools library reloaded: " + toolsLibrary.registeredTypeIds().size() + " tool(s)");
+        }));
 
         addWindowListener(new WindowAdapter() {
             @Override public void windowClosing(WindowEvent e) {
@@ -141,9 +151,7 @@ public final class MainFrame extends JFrame {
             String id = SaveAsToolDialog.run(this, model, toolsLibrary);
             if (id != null) {
                 palette.reload();
-                JOptionPane.showMessageDialog(this,
-                        "Saved tool '" + id + "'. It now appears in the palette.",
-                        "Save as Tool", JOptionPane.INFORMATION_MESSAGE);
+                statusBar.info("Saved tool '" + id + "' — added to palette");
             }
         });
         fileMenu.add(saveAsTool);
@@ -185,6 +193,7 @@ public final class MainFrame extends JFrame {
                 model.loadProject(Paths.get(path));
                 setTitle("PixelFlow Studio — " + path);
             } catch (IOException ex) {
+                statusBar.error("Open failed: " + ex.getMessage());
                 JOptionPane.showMessageDialog(this,
                         "Failed to load " + path + ":\n" + ex.getMessage(),
                         "Open error", JOptionPane.ERROR_MESSAGE);
@@ -197,7 +206,9 @@ public final class MainFrame extends JFrame {
         try {
             model.save();
             setTitle("PixelFlow Studio — " + model.currentPath());
+            statusBar.info("Saved " + model.currentPath().getFileName());
         } catch (IOException ex) {
+            statusBar.error("Save failed: " + ex.getMessage());
             JOptionPane.showMessageDialog(this,
                     "Failed to save: " + ex.getMessage(),
                     "Save error", JOptionPane.ERROR_MESSAGE);
@@ -222,7 +233,9 @@ public final class MainFrame extends JFrame {
         try {
             model.saveAs(f.toPath());
             setTitle("PixelFlow Studio — " + f.toPath());
+            statusBar.info("Saved " + f.toPath().getFileName());
         } catch (IOException ex) {
+            statusBar.error("Save failed: " + ex.getMessage());
             JOptionPane.showMessageDialog(this,
                     "Failed to save: " + ex.getMessage(),
                     "Save error", JOptionPane.ERROR_MESSAGE);
