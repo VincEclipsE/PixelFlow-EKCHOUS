@@ -74,10 +74,21 @@ public final class Smoke {
                 ctx = new DwPixelFlow(gl, resources);
                 ctx.printGL();
                 // GL3 core profile requires a VAO bound before any draw call.
-                // PJOGL bound one implicitly; we have to do it ourselves.
                 int[] vao = new int[1];
                 gl.getGL2ES3().glGenVertexArrays(1, vao, 0);
                 gl.getGL2ES3().glBindVertexArray(vao[0]);
+                // Wire up JOGL's debug pipe so GL errors come back with source info.
+                try {
+                    d.getContext().enableGLDebugMessage(true);
+                    d.getContext().addGLDebugListener(e -> {
+                        int sev = e.getDbgSeverity();
+                        if (sev == 0x9146 || sev == 0x9147) {
+                            System.err.println("[GL] " + e.getDbgMsg());
+                        }
+                    });
+                } catch (Throwable t) {
+                    System.err.println("[GL] debug listener unavailable: " + t.getMessage());
+                }
                 scene.init(ctx);
             }
 
