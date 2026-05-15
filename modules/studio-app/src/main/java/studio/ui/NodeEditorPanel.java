@@ -66,7 +66,8 @@ public final class NodeEditorPanel extends JPanel {
     private final List<Consumer<Node>> selectionListeners = new ArrayList<>();
 
     private PflowReader.Result current;
-    private Node selected;
+    private Node selected;                                          // primary (drives param panel)
+    private final java.util.Set<Node> secondary = new java.util.LinkedHashSet<>(); // additional selected nodes
 
     // Viewport transform
     private double zoom = 1.0;
@@ -81,13 +82,16 @@ public final class NodeEditorPanel extends JPanel {
     private OutputPort<?> wireFromPort;     // start of an in-progress edge drag
     private Point2D wireDragCurrent;        // current mouse position in graph space
 
+    // Marquee
+    private Point2D marqueeStart;           // world-space anchor; null when not marqueeing
+    private Point2D marqueeCurrent;
+    // Drag-move tracking for multi-select
+    private final java.util.Map<Node, int[]> dragStartPositions = new java.util.IdentityHashMap<>();
+
     private final NodeFactoryRegistry registry;
     private final studio.graph.UndoStack undo = new studio.graph.UndoStack();
     private final ParamEditTracker paramTracker = new ParamEditTracker(undo);
     private StatusBar statusBar;
-
-    // Move tracking: position at mousePressed → diff on mouseReleased
-    private int dragStartX, dragStartY;
 
     public void setStatusBar(StatusBar bar) { this.statusBar = bar; }
 
@@ -156,6 +160,10 @@ public final class NodeEditorPanel extends JPanel {
                 }
                 if (e.isControlDown() && code == KeyEvent.VK_V) {
                     pasteFromClipboard();
+                    return;
+                }
+                if (e.isControlDown() && code == KeyEvent.VK_A) {
+                    if (current != null) setMultiSelection(current.graph.nodes());
                     return;
                 }
                 if (selected == null || current == null) return;
@@ -256,23 +264,29 @@ public final class NodeEditorPanel extends JPanel {
 
     public void deleteSelected() {
         if (selected == null || current == null) return;
-        Node target = selected;
+        java.util.List<Node> targets = allSelected();
         setSelection(null);
-        doRemoveNode(target);
+        for (Node t : targets) doRemoveNode(t);
     }
 
     public void toggleMuteSelected() {
         if (selected == null) return;
-        final Node n = selected;
-        final boolean newOn = !n.isEnabled();
-        n.setEnabled(newOn);
+        java.util.List<Node> targets = allSelected();
+        // Toggle relative to the primary's current state so the group ends up consistent.
+        final boolean newOn = !selected.isEnabled();
+        for (Node n : targets) n.setEnabled(newOn);
         if (statusBar != null) {
-            statusBar.info((newOn ? "Enabled " : "Muted ") + n.label());
+            statusBar.info((newOn ? "Enabled " : "Muted ") + targets.size()
+                    + (targets.size() == 1 ? " node" : " nodes"));
         }
+        final java.util.List<Node> snapshot = new java.util.ArrayList<>(targets);
         undo.push(new studio.graph.UndoStack.Command() {
-            @Override public void apply()  { n.setEnabled(newOn);  repaint(); }
-            @Override public void revert() { n.setEnabled(!newOn); repaint(); }
-            @Override public String description() { return (newOn ? "enable " : "mute ") + n.label(); }
+            @Override public void apply()  { for (Node n : snapshot) n.setEnabled(newOn);  repaint(); }
+            @Override public void revert() { for (Node n : snapshot) n.setEnabled(!newOn); repaint(); }
+            @Override public String description() {
+                return (newOn ? "enable " : "mute ") + snapshot.size()
+                        + (snapshot.size() == 1 ? " node" : " nodes");
+            }
         });
         repaint();
     }
@@ -280,9 +294,9 @@ public final class NodeEditorPanel extends JPanel {
     public void cutSelected() {
         if (selected == null || current == null) return;
         copySelectedToClipboard();
-        Node target = selected;
+        java.util.List<Node> targets = allSelected();
         setSelection(null);
-        doRemoveNode(target);
+        for (Node t : targets) doRemoveNode(t);
     }
 
     /** Remove + remember edges so undo can restore them. */
@@ -418,15 +432,74 @@ public final class NodeEditorPanel extends JPanel {
         });
     }
 
-    private void pushMove(Node n, int fromX, int fromY, int toX, int toY) {
-        if (fromX == toX && fromY == toY) return;
-        final Node node = n;
+    private void finishMarquee(boolean additive) {
+        if (current == null || marqueeStart == null || marqueeCurrent == null) return;
+        double mx = Math.min(marqueeStart.getX(), marqueeCurrent.getX());
+        double my = Math.min(marqueeStart.getY(), marqueeCurrent.getY());
+        double mxe = Math.max(marqueeStart.getX(), marqueeCurrent.getX());
+        double mye = Math.max(marqueeStart.getY(), marqueeCurrent.getY());
+        if ((mxe - mx) < 4 && (mye - my) < 4) return; // treat as click, not marquee
+
+        java.util.List<Node> picked = new java.util.ArrayList<>();
+        for (Node n : current.graph.nodes()) {
+            Layout L = layoutOf(n);
+            int h = nodeHeight(n), w = nodeWidth(n);
+            // intersection test against rect [mx..mxe] x [my..mye]
+            if (L.x + w >= mx && L.x <= mxe && L.y + h >= my && L.y <= mye) {
+                picked.add(n);
+            }
+        }
+        if (additive) {
+            for (Node n : picked) {
+                if (selected == null) {
+                    selected = n;
+                    for (Consumer<Node> l : selectionListeners) l.accept(n);
+                } else if (n != selected) {
+                    secondary.add(n);
+                }
+            }
+        } else {
+            setMultiSelection(picked);
+        }
+    }
+
+    private void pushGroupMove() {
+        if (dragStartPositions.isEmpty()) return;
+        // Snapshot the after-positions
+        final java.util.Map<Node, int[]> before = new java.util.IdentityHashMap<>(dragStartPositions);
+        final java.util.Map<Node, int[]> after = new java.util.IdentityHashMap<>();
+        boolean anyMoved = false;
+        for (var entry : before.entrySet()) {
+            Layout L = layouts.get(entry.getKey());
+            if (L == null) continue;
+            after.put(entry.getKey(), new int[]{ L.x, L.y });
+            int[] start = entry.getValue();
+            if (L.x != start[0] || L.y != start[1]) anyMoved = true;
+        }
+        if (!anyMoved) return;
+
         undo.push(new studio.graph.UndoStack.Command() {
-            @Override public void apply()  { layouts.put(node, new Layout(toX,   toY));   repaint(); }
-            @Override public void revert() { layouts.put(node, new Layout(fromX, fromY)); repaint(); }
-            @Override public String description() { return "move " + node.label(); }
+            @Override public void apply() {
+                for (var e : after.entrySet()) {
+                    int[] pos = e.getValue();
+                    layouts.put(e.getKey(), new Layout(pos[0], pos[1]));
+                }
+                repaint();
+            }
+            @Override public void revert() {
+                for (var e : before.entrySet()) {
+                    int[] pos = e.getValue();
+                    layouts.put(e.getKey(), new Layout(pos[0], pos[1]));
+                }
+                repaint();
+            }
+            @Override public String description() {
+                return after.size() == 1 ? "move " + after.keySet().iterator().next().label()
+                        : "move " + after.size() + " nodes";
+            }
         });
     }
+
 
     @SuppressWarnings({"rawtypes", "unchecked"})
     public void copySelectedToClipboard() {
@@ -487,22 +560,28 @@ public final class NodeEditorPanel extends JPanel {
     @SuppressWarnings({"rawtypes", "unchecked"})
     public void duplicateSelected() {
         if (selected == null || current == null) return;
-        Node src = selected;
-        Node copy = registry.create(src.typeId());
-        // Copy label and enabled state
-        copy.setLabel(src.label() + " copy");
-        copy.setEnabled(src.isEnabled());
-        // Copy params by name
-        var srcParams = src.parameters();
-        for (int i = 0; i < srcParams.size(); i++) {
-            studio.graph.Parameter sp = srcParams.get(i);
-            studio.graph.Parameter cp = (studio.graph.Parameter) copy.parameter(sp.name);
-            if (cp != null) cp.set(sp.get());
+        java.util.List<Node> sources = allSelected();
+        java.util.List<Node> copies = new java.util.ArrayList<>();
+        for (Node src : sources) {
+            Node copy = registry.create(src.typeId());
+            copy.setLabel(src.label() + " copy");
+            copy.setEnabled(src.isEnabled());
+            var srcParams = src.parameters();
+            for (int i = 0; i < srcParams.size(); i++) {
+                studio.graph.Parameter sp = srcParams.get(i);
+                studio.graph.Parameter cp = (studio.graph.Parameter) copy.parameter(sp.name);
+                if (cp != null) cp.set(sp.get());
+            }
+            Layout L = layoutOf(src);
+            doAddNode(copy, L.x + 24, L.y + 24);
+            copies.add(copy);
         }
-        Layout L = layoutOf(src);
-        doAddNode(copy, L.x + 24, L.y + 24);
-        setSelection(copy);
-        if (statusBar != null) statusBar.info("Duplicated " + src.label());
+        setMultiSelection(copies);
+        if (statusBar != null) {
+            statusBar.info(sources.size() == 1
+                    ? "Duplicated " + sources.get(0).label()
+                    : "Duplicated " + sources.size() + " nodes");
+        }
     }
 
     /** Read-only view of node→(x,y) so the writer can persist layout. */
@@ -517,6 +596,20 @@ public final class NodeEditorPanel extends JPanel {
     public void addSelectionListener(Consumer<Node> listener) { selectionListeners.add(listener); }
 
     public Node selectedNode() { return selected; }
+
+    /** Primary + secondary selection (the union the user thinks of as "selected"). */
+    public java.util.List<Node> allSelected() {
+        if (selected == null) return java.util.List.of();
+        if (secondary.isEmpty()) return java.util.List.of(selected);
+        java.util.List<Node> out = new java.util.ArrayList<>(secondary.size() + 1);
+        out.add(selected);
+        for (Node n : secondary) if (n != selected) out.add(n);
+        return out;
+    }
+
+    private boolean isInSelection(Node n) {
+        return n == selected || secondary.contains(n);
+    }
 
     /* ------------------------------ Layout ------------------------------ */
 
@@ -578,6 +671,19 @@ public final class NodeEditorPanel extends JPanel {
         drawGrid(g);
         for (Edge e : current.graph.edges()) drawEdge(g, e);
         for (Node n : current.graph.nodes()) drawNode(g, n);
+
+        if (marqueeStart != null && marqueeCurrent != null) {
+            double mx = Math.min(marqueeStart.getX(), marqueeCurrent.getX());
+            double my = Math.min(marqueeStart.getY(), marqueeCurrent.getY());
+            double mw = Math.abs(marqueeCurrent.getX() - marqueeStart.getX());
+            double mh = Math.abs(marqueeCurrent.getY() - marqueeStart.getY());
+            g.setColor(new Color(255, 196, 64, 30));
+            g.fillRect((int) mx, (int) my, (int) mw, (int) mh);
+            g.setColor(new Color(255, 196, 64, 180));
+            g.setStroke(new BasicStroke(1.2f, BasicStroke.CAP_BUTT, BasicStroke.JOIN_MITER,
+                    1f, new float[]{ 6f, 4f }, 0f));
+            g.drawRect((int) mx, (int) my, (int) mw, (int) mh);
+        }
 
         if (wireFromPort != null && wireDragCurrent != null) {
             Point2D from = outputPortPos(wireFromPort);
@@ -688,10 +794,10 @@ public final class NodeEditorPanel extends JPanel {
         boolean disabled = !n.isEnabled();
         RoundRectangle2D body = new RoundRectangle2D.Double(L.x, L.y, NODE_WIDTH, height, 8, 8);
 
-        // Selection halo
-        if (n == selected) {
-            g.setColor(new Color(255, 196, 64, 180));
-            g.setStroke(new BasicStroke(3f));
+        // Selection halo (primary brighter than secondary)
+        if (isInSelection(n)) {
+            g.setColor(n == selected ? new Color(255, 196, 64, 200) : new Color(255, 196, 64, 130));
+            g.setStroke(new BasicStroke(n == selected ? 3f : 2.2f));
             g.draw(new RoundRectangle2D.Double(L.x - 2, L.y - 2, NODE_WIDTH + 4, height + 4, 10, 10));
         }
 
@@ -747,9 +853,9 @@ public final class NodeEditorPanel extends JPanel {
         int height = Math.max(NODE_HEADER, 12 + lines.length * NOTE_LINE);
         RoundRectangle2D body = new RoundRectangle2D.Double(L.x, L.y, NOTE_WIDTH, height, 6, 6);
 
-        if (n == selected) {
-            g.setColor(new Color(255, 196, 64, 180));
-            g.setStroke(new BasicStroke(3f));
+        if (isInSelection(n)) {
+            g.setColor(n == selected ? new Color(255, 196, 64, 200) : new Color(255, 196, 64, 130));
+            g.setStroke(new BasicStroke(n == selected ? 3f : 2.2f));
             g.draw(new RoundRectangle2D.Double(L.x - 2, L.y - 2, NOTE_WIDTH + 4, height + 4, 8, 8));
         }
 
@@ -805,7 +911,9 @@ public final class NodeEditorPanel extends JPanel {
                 to.getX() - dx, to.getY(),
                 to.getX(), to.getY());
         boolean connectedToSel =
-                selected != null && (e.from.owner == selected || e.to.owner == selected);
+                (selected != null && (e.from.owner == selected || e.to.owner == selected))
+                || (!secondary.isEmpty()
+                        && (secondary.contains(e.from.owner) || secondary.contains(e.to.owner)));
         if (connectedToSel) {
             g.setStroke(new BasicStroke(3.2f));
             g.setColor(new Color(255, 196, 64, 220));
@@ -913,9 +1021,31 @@ public final class NodeEditorPanel extends JPanel {
     }
 
     private void setSelection(Node n) {
-        if (n == selected) return;
+        if (n == selected && secondary.isEmpty()) return;
         selected = n;
+        secondary.clear();
         for (Consumer<Node> l : selectionListeners) l.accept(n);
+        repaint();
+    }
+
+    /** Toggle n in/out of the secondary set without touching the primary. */
+    private void toggleSecondary(Node n) {
+        if (n == null) return;
+        if (n == selected) return;
+        if (!secondary.add(n)) secondary.remove(n);
+        repaint();
+    }
+
+    /** Replace the entire selection with the given set; first item becomes primary. */
+    public void setMultiSelection(java.util.Collection<Node> nodes) {
+        secondary.clear();
+        Node first = null;
+        for (Node n : nodes) {
+            if (first == null) first = n;
+            else secondary.add(n);
+        }
+        selected = first;
+        for (Consumer<Node> l : selectionListeners) l.accept(selected);
         repaint();
     }
 
@@ -944,14 +1074,38 @@ public final class NodeEditorPanel extends JPanel {
                 return;
             }
             Node hit = hitTest(e.getPoint());
-            setSelection(hit);
-            if (hit != null && e.getButton() == MouseEvent.BUTTON1) {
+            if (e.isShiftDown() && hit != null) {
+                // Shift-click adds/removes the node from the secondary set
+                // without disturbing the primary, so multi-select grows.
+                if (selected == null) {
+                    selected = hit;
+                    for (Consumer<Node> l : selectionListeners) l.accept(hit);
+                } else {
+                    toggleSecondary(hit);
+                }
+                repaint();
+            } else if (hit != null) {
+                if (!isInSelection(hit)) setSelection(hit);
+                else selected = hit; // keep multi-set; promote to primary
+            } else {
+                // Empty space — start marquee
+                if (!e.isShiftDown()) setSelection(null);
+                if (e.getButton() == MouseEvent.BUTTON1) {
+                    marqueeStart = screenToWorld(e.getPoint());
+                    marqueeCurrent = marqueeStart;
+                }
+            }
+            if (hit != null && e.getButton() == MouseEvent.BUTTON1 && !e.isShiftDown()) {
                 draggingNode = hit;
                 Point2D world = screenToWorld(e.getPoint());
                 Layout L = layoutOf(hit);
                 dragNodeOffset = new Point2D.Double(world.getX() - L.x, world.getY() - L.y);
-                dragStartX = L.x;
-                dragStartY = L.y;
+                // Snapshot positions of every selected node for group move
+                dragStartPositions.clear();
+                for (Node n : allSelected()) {
+                    Layout p = layouts.get(n);
+                    if (p != null) dragStartPositions.put(n, new int[]{ p.x, p.y });
+                }
             }
         }
 
@@ -965,9 +1119,16 @@ public final class NodeEditorPanel extends JPanel {
                 wireDragCurrent = null;
                 repaint();
             }
+            if (marqueeStart != null && marqueeCurrent != null) {
+                finishMarquee(e.isShiftDown());
+                marqueeStart = null;
+                marqueeCurrent = null;
+                repaint();
+            }
             if (draggingNode != null) {
-                Layout L = layoutOf(draggingNode);
-                pushMove(draggingNode, dragStartX, dragStartY, L.x, L.y);
+                // Push a multi-move command covering every selected node that actually moved.
+                pushGroupMove();
+                dragStartPositions.clear();
             }
             draggingNode = null;
             dragPanStart = null;
@@ -976,6 +1137,11 @@ public final class NodeEditorPanel extends JPanel {
         @Override public void mouseDragged(MouseEvent e) {
             if (wireFromPort != null) {
                 wireDragCurrent = screenToWorld(e.getPoint());
+                repaint();
+                return;
+            }
+            if (marqueeStart != null) {
+                marqueeCurrent = screenToWorld(e.getPoint());
                 repaint();
                 return;
             }
@@ -988,8 +1154,13 @@ public final class NodeEditorPanel extends JPanel {
                     nx = Math.round((float) nx / SNAP_GRID) * SNAP_GRID;
                     ny = Math.round((float) ny / SNAP_GRID) * SNAP_GRID;
                 }
-                L.x = nx;
-                L.y = ny;
+                int dx = nx - L.x;
+                int dy = ny - L.y;
+                // Move every selected node by the same delta
+                for (Node n : allSelected()) {
+                    Layout p = layouts.get(n);
+                    if (p != null) { p.x += dx; p.y += dy; }
+                }
                 repaint();
             } else if (dragPanStart != null) {
                 panX = dragPanStartX + (e.getX() - dragPanStart.x);

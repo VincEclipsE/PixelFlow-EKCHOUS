@@ -262,11 +262,16 @@ public final class MainFrame extends JFrame {
                   Right-click edge     Disconnect
                   Drag output→input    Create edge
 
-                Selected node
-                  Delete               Remove
-                  M                    Mute / unmute (skip per-frame eval)
-                  Ctrl+D               Duplicate
-                  Ctrl+C / Ctrl+V      Copy / paste (system clipboard)
+                Selection
+                  Click node           Select (replaces selection)
+                  Shift+click          Add/remove from selection
+                  Left-drag empty      Marquee select
+                  Ctrl+A               Select all
+                  Delete               Remove selected
+                  M                    Mute / unmute selected
+                  Ctrl+D               Duplicate selected
+                  Ctrl+C / Ctrl+V      Copy / paste primary (system clipboard)
+                  Ctrl+X               Cut selected
 
                 Editing
                   Ctrl+Z               Undo
