@@ -54,6 +54,7 @@ public final class PftoolReader {
                 Node innerNode = baseRegistry.create(nj.typeId);
                 rebindId(innerNode, nj.id);
                 if (nj.label != null) innerNode.setLabel(nj.label);
+                if (nj.enabled != null) innerNode.setEnabled(nj.enabled);
                 applyParams(innerNode, nj.params);
                 inner.addNode(innerNode);
                 innerById.put(nj.id, innerNode);

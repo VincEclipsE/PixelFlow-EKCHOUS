@@ -128,6 +128,10 @@ public final class HeadlessSmoke {
                           studio.nodes.filter.GammaNode::new)
                 .register(studio.nodes.filter.LuminanceThresholdNode.TYPE_ID,
                           studio.nodes.filter.LuminanceThresholdNode::new)
+                .register(studio.nodes.filter.DifferenceNode.TYPE_ID,
+                          studio.nodes.filter.DifferenceNode::new)
+                .register(studio.nodes.filter.MultiplyNode.TYPE_ID,
+                          studio.nodes.filter.MultiplyNode::new)
                 // Anti-aliasing
                 .register(studio.nodes.aa.FxaaNode.TYPE_ID,
                           studio.nodes.aa.FxaaNode::new)

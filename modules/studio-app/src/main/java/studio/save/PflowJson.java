@@ -31,6 +31,8 @@ public final class PflowJson {
         public String id;
         public String typeId;
         public String label;
+        /** Omit when true (enabled is the default). */
+        public Boolean enabled;
         public Map<String, Object> params = new LinkedHashMap<>();
     }
 

@@ -14,6 +14,7 @@ public abstract class AbstractNode implements Node {
 
     private final NodeId id;
     private String label;
+    private volatile boolean enabled = true;
     private final List<InputPort<?>> inputs = new ArrayList<>();
     private final List<OutputPort<?>> outputs = new ArrayList<>();
     private final List<Parameter<?>> parameters = new ArrayList<>();
@@ -35,6 +36,9 @@ public abstract class AbstractNode implements Node {
     @Override public NodeId id() { return id; }
     @Override public String label() { return label; }
     @Override public void setLabel(String label) { this.label = label; }
+
+    @Override public boolean isEnabled() { return enabled; }
+    @Override public void setEnabled(boolean enabled) { this.enabled = enabled; }
 
     @Override public List<InputPort<?>> inputs() { return Collections.unmodifiableList(inputs); }
     @Override public List<OutputPort<?>> outputs() { return Collections.unmodifiableList(outputs); }

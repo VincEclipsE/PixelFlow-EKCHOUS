@@ -103,6 +103,7 @@ public final class PflowReader {
             }
         }
         if (n.label != null) node.setLabel(n.label);
+        if (n.enabled != null) node.setEnabled(n.enabled);
 
         if (n.params != null && !n.params.isEmpty()) {
             for (Parameter<?> p : node.parameters()) {

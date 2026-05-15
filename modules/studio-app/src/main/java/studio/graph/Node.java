@@ -20,6 +20,11 @@ public interface Node {
 
     void setLabel(String label);
 
+    /** Whether the runtime should evaluate this node each frame. Disabled nodes publish nothing. */
+    default boolean isEnabled() { return true; }
+
+    default void setEnabled(boolean enabled) { /* default mutable on AbstractNode */ }
+
     List<InputPort<?>> inputs();
     List<OutputPort<?>> outputs();
     List<Parameter<?>> parameters();

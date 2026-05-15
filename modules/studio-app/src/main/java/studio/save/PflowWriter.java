@@ -44,6 +44,7 @@ public final class PflowWriter {
             nj.id = n.id().value;
             nj.typeId = n.typeId();
             nj.label = n.label();
+            if (!n.isEnabled()) nj.enabled = Boolean.FALSE;
             nj.params = new LinkedHashMap<>();
             for (Parameter<?> p : n.parameters()) {
                 Object v = paramValueForJson(p);

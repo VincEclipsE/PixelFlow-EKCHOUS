@@ -58,6 +58,7 @@ public final class GraphRuntime {
         FrameImpl frame = new FrameImpl(this, nowSec, dt);
 
         for (Node n : order) {
+            if (!n.isEnabled()) continue;
             frame.currentNode = n;
             try {
                 n.evaluate(frame);

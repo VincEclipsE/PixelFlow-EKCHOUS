@@ -100,10 +100,19 @@ public final class NodeEditorPanel extends JPanel {
 
         addKeyListener(new KeyAdapter() {
             @Override public void keyPressed(KeyEvent e) {
-                if (e.getKeyCode() == KeyEvent.VK_DELETE && selected != null && current != null) {
+                if (selected == null || current == null) return;
+                int code = e.getKeyCode();
+                if (code == KeyEvent.VK_DELETE) {
                     current.graph.removeNode(selected.id());
                     layouts.remove(selected);
                     setSelection(null);
+                    repaint();
+                } else if (code == KeyEvent.VK_M || code == KeyEvent.VK_D) {
+                    boolean wasOn = selected.isEnabled();
+                    selected.setEnabled(!wasOn);
+                    if (statusBar != null) {
+                        statusBar.info((wasOn ? "Muted " : "Enabled ") + selected.label());
+                    }
                     repaint();
                 }
             }
@@ -237,6 +246,7 @@ public final class NodeEditorPanel extends JPanel {
     private void drawNode(Graphics2D g, Node n) {
         Layout L = layoutOf(n);
         int height = nodeHeight(n);
+        boolean disabled = !n.isEnabled();
         RoundRectangle2D body = new RoundRectangle2D.Double(L.x, L.y, NODE_WIDTH, height, 8, 8);
 
         // Selection halo
@@ -247,18 +257,22 @@ public final class NodeEditorPanel extends JPanel {
         }
 
         // Body
-        g.setColor(new Color(52, 52, 64));
+        g.setColor(disabled ? new Color(40, 40, 48) : new Color(52, 52, 64));
         g.fill(body);
-        g.setColor(new Color(80, 80, 96));
+        g.setColor(disabled ? new Color(70, 70, 80) : new Color(80, 80, 96));
         g.setStroke(new BasicStroke(1.2f));
         g.draw(body);
 
         // Header
         RoundRectangle2D header = new RoundRectangle2D.Double(L.x, L.y, NODE_WIDTH, NODE_HEADER, 8, 8);
-        g.setColor(headerColor(n));
+        Color hc = headerColor(n);
+        g.setColor(disabled
+                ? new Color(hc.getRed() / 3, hc.getGreen() / 3, hc.getBlue() / 3)
+                : hc);
         g.fill(header);
-        g.setColor(new Color(220, 220, 230));
-        g.drawString(n.label(), L.x + 8, L.y + 15);
+        g.setColor(disabled ? new Color(130, 130, 140) : new Color(220, 220, 230));
+        String headerLabel = (disabled ? "○ " : "") + n.label();
+        g.drawString(headerLabel, L.x + 8, L.y + 15);
 
         // Inputs (left)
         List<InputPort<?>> inputs = n.inputs();
