@@ -115,7 +115,10 @@ public final class MainFrame extends JFrame {
                     + (model.currentPath() != null ? model.currentPath().getFileName() : "memory"));
         });
 
-        editor.addSelectionListener(n -> parameters.setActiveNode(n));
+        editor.addSelectionListener(n -> {
+            parameters.setActiveNode(n);
+            preview.setThumbnailTarget(n, parameters::setThumbnail);
+        });
 
         // Hot-reload: watch tools/ for .pftool changes, refresh the palette.
         toolsLibrary.startWatcher(() -> SwingUtilities.invokeLater(() -> {

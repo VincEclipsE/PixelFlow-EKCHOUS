@@ -37,6 +37,7 @@ public final class ParameterPanel extends JPanel {
     private final JLabel typeLabel = new JLabel(" ");
     private final JTextField nameField = new JTextField();
     private final JPanel headerWrap = new JPanel(new BorderLayout(4, 2));
+    private final JLabel thumbnail = new JLabel();
     private final JPanel body = new JPanel();
     private Runnable onLabelChange;
 
@@ -62,11 +63,29 @@ public final class ParameterPanel extends JPanel {
         typeLabel.setForeground(new Color(140, 140, 150));
         typeLabel.setBorder(BorderFactory.createEmptyBorder(0, 8, 4, 8));
 
+        thumbnail.setHorizontalAlignment(SwingConstants.CENTER);
+        thumbnail.setBorder(BorderFactory.createEmptyBorder(0, 0, 4, 0));
+        thumbnail.setPreferredSize(new java.awt.Dimension(160, 0));
+
         headerWrap.setBorder(BorderFactory.createEmptyBorder(6, 6, 0, 6));
         headerWrap.add(nameField, BorderLayout.NORTH);
         headerWrap.add(typeLabel, BorderLayout.CENTER);
+        headerWrap.add(thumbnail, BorderLayout.SOUTH);
         add(headerWrap, BorderLayout.NORTH);
         add(scroll, BorderLayout.CENTER);
+    }
+
+    /** Display a live thumbnail image at the top of the panel (null clears it). */
+    public void setThumbnail(java.awt.image.BufferedImage img) {
+        if (img == null) {
+            thumbnail.setIcon(null);
+            thumbnail.setPreferredSize(new java.awt.Dimension(160, 0));
+        } else {
+            thumbnail.setIcon(new javax.swing.ImageIcon(img));
+            thumbnail.setPreferredSize(new java.awt.Dimension(img.getWidth(), img.getHeight() + 4));
+        }
+        headerWrap.revalidate();
+        headerWrap.repaint();
     }
 
     /** Optional callback fired after the user renames the active node via the panel. */

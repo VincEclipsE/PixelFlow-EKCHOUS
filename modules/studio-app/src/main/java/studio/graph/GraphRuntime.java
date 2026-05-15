@@ -85,6 +85,11 @@ public final class GraphRuntime {
 
     Map<OutputPort<?>, Object> bus() { return bus; }
 
+    /** Snapshot of the most recently published value on {@code port}, or null. */
+    public Object latestPublished(OutputPort<?> port) {
+        return bus.get(port);
+    }
+
     static final class FrameImpl implements Frame {
         private final GraphRuntime owner;
         private final double timeSec;
