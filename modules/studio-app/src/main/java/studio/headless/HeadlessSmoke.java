@@ -58,7 +58,10 @@ public final class HeadlessSmoke {
         System.out.println("HeadlessSmoke: loading " + projectPath
                 + " for " + frames + " frames → " + outPath);
 
-        PflowReader reader = new PflowReader(defaultRegistry());
+        studio.graph.NodeFactoryRegistry registry = defaultRegistry();
+        // Make user/sample compound tools available to the loader too.
+        new studio.save.ToolsLibrary(Paths.get("tools"), registry).rescan();
+        PflowReader reader = new PflowReader(registry);
 
         // Try filesystem first, then classpath.
         PflowReader.Result loaded;

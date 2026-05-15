@@ -1,0 +1,73 @@
+{
+  "schema": "pftool/1",
+  "typeId": "sample:SoftEdges",
+  "version": "1.0.0",
+  "name": "Soft Edges",
+  "category": "Samples",
+  "description": "Bundled sample. Detects edges with Sobel then softens them with a Gaussian blur. Shows how compound tools wrap an inner pipeline behind a small param surface.",
+  "createdAt": "2026-05-15T00:00:00Z",
+  "iface": {
+    "inputs": [
+      { "alias": "src",
+        "type": "tex2d",
+        "innerNodeId": "n-in" }
+    ],
+    "outputs": [
+      { "alias": "out",
+        "type": "tex2d",
+        "innerNodeId": "n-blur",
+        "innerPortName": "dst" }
+    ],
+    "params": [
+      { "alias": "kernel",
+        "type": "int",
+        "uiHint": "SLIDER",
+        "defaultValue": 2,
+        "min": 0,
+        "max": 2,
+        "description": "Sobel kernel: 0=horz 1=vert 2=tlbr",
+        "innerNodeId": "n-sobel",
+        "innerParamName": "kernel" },
+      { "alias": "softness",
+        "type": "int",
+        "uiHint": "SLIDER",
+        "defaultValue": 6,
+        "min": 0,
+        "max": 32,
+        "description": "Gaussian blur radius applied after the Sobel pass",
+        "innerNodeId": "n-blur",
+        "innerParamName": "radius" }
+    ]
+  },
+  "subgraph": {
+    "schema": "graph/1",
+    "nodes": [
+      { "id": "n-in",
+        "typeId": "studio.builtin.GraphInput",
+        "label": "in",
+        "layout": { "x": 40, "y": 80 } },
+      { "id": "n-sobel",
+        "typeId": "pf.filter.Sobel",
+        "label": "sobel",
+        "layout": { "x": 280, "y": 80 },
+        "params": { "kernel": 2 } },
+      { "id": "n-blur",
+        "typeId": "pf.filter.GaussianBlur",
+        "label": "blur",
+        "layout": { "x": 520, "y": 80 },
+        "params": { "radius": 6 } },
+      { "id": "n-out",
+        "typeId": "studio.builtin.GraphOutput",
+        "label": "out",
+        "layout": { "x": 760, "y": 80 } }
+    ],
+    "edges": [
+      { "from": { "node": "n-in",    "port": "out" },
+        "to":   { "node": "n-sobel", "port": "src" } },
+      { "from": { "node": "n-sobel", "port": "dst" },
+        "to":   { "node": "n-blur",  "port": "src" } },
+      { "from": { "node": "n-blur",  "port": "dst" },
+        "to":   { "node": "n-out",   "port": "in"  } }
+    ]
+  }
+}

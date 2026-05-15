@@ -52,10 +52,12 @@ Thumbs.db
 **/jpackage-build/
 **/jlink-runtime/
 
-# User-saved tool library (runtime artifact, not source)
+# User-saved tool library (runtime artifact, not source).
+# Bundled sample-*.pftool files ship as starters and ARE tracked.
 tools/*.pftool
 tools/*.png
 !tools/.gitkeep
+!tools/sample-*.pftool
 
 # Project save files (user content, not source)
 *.pflow
