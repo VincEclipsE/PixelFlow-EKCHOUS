@@ -141,6 +141,10 @@ public final class HeadlessSmoke {
                           studio.nodes.filter.LaplaceNode::new)
                 .register(studio.nodes.filter.ClampNode.TYPE_ID,
                           studio.nodes.filter.ClampNode::new)
+                .register(studio.nodes.filter.BilateralFilterNode.TYPE_ID,
+                          studio.nodes.filter.BilateralFilterNode::new)
+                .register(studio.nodes.filter.DistanceTransformNode.TYPE_ID,
+                          studio.nodes.filter.DistanceTransformNode::new)
                 // Anti-aliasing
                 .register(studio.nodes.aa.FxaaNode.TYPE_ID,
                           studio.nodes.aa.FxaaNode::new)
