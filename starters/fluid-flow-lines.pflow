@@ -1,0 +1,50 @@
+{
+  "schema": "pflow/1",
+  "name": "Fluid flow lines",
+  "output": {
+    "width": 800,
+    "height": 800,
+    "frames": 60,
+    "rootOutputNode": "n-screen"
+  },
+  "nodes": [
+    {
+      "id": "n-fluid",
+      "typeId": "pf.fluid.DwFluid2D",
+      "label": "fluid",
+      "layout": { "x": 40, "y": 160 },
+      "params": {
+        "width": 800,
+        "height": 800,
+        "grid_scale": 1,
+        "dissipation_velocity": 0.95,
+        "dissipation_density": 0.99,
+        "vorticity": 0.25,
+        "jacobi_iterations": 30,
+        "inject_color": [0.4, 0.85, 1.0, 1.0],
+        "inject_radius": 28.0,
+        "inject_pos": [400.0, 200.0],
+        "inject_velocity": [0.0, 80.0]
+      }
+    },
+    {
+      "id": "n-flow",
+      "typeId": "pf.flowfield.FlowField",
+      "label": "flowfield",
+      "layout": { "x": 320, "y": 160 },
+      "params": { "blur_iterations": 1, "blur_radius": 2 }
+    },
+    {
+      "id": "n-screen",
+      "typeId": "studio.builtin.GraphOutput",
+      "label": "output",
+      "layout": { "x": 600, "y": 160 }
+    }
+  ],
+  "edges": [
+    { "from": { "node": "n-fluid", "port": "density" },
+      "to":   { "node": "n-flow",  "port": "src" } },
+    { "from": { "node": "n-flow",  "port": "dst" },
+      "to":   { "node": "n-screen", "port": "in" } }
+  ]
+}

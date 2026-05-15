@@ -142,6 +142,8 @@ public final class HeadlessSmoke {
                 // Anti-aliasing
                 .register(studio.nodes.aa.FxaaNode.TYPE_ID,
                           studio.nodes.aa.FxaaNode::new)
+                .register(studio.nodes.flowfield.FlowFieldNode.TYPE_ID,
+                          studio.nodes.flowfield.FlowFieldNode::new)
                 // Boundaries
                 .register(GraphOutputNode.TYPE_ID,           GraphOutputNode::new)
                 .register(studio.nodes.builtin.GraphInputNode.TYPE_ID,
