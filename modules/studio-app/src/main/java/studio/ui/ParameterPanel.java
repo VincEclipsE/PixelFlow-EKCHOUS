@@ -1,0 +1,244 @@
+package studio.ui;
+
+import java.awt.BorderLayout;
+import java.awt.Color;
+import java.awt.event.ActionEvent;
+import java.text.NumberFormat;
+
+import javax.swing.AbstractAction;
+import javax.swing.BorderFactory;
+import javax.swing.Box;
+import javax.swing.BoxLayout;
+import javax.swing.JCheckBox;
+import javax.swing.JColorChooser;
+import javax.swing.JComboBox;
+import javax.swing.JComponent;
+import javax.swing.JFormattedTextField;
+import javax.swing.JLabel;
+import javax.swing.JPanel;
+import javax.swing.JScrollPane;
+import javax.swing.JSlider;
+import javax.swing.JSpinner;
+import javax.swing.JTextField;
+import javax.swing.SpinnerNumberModel;
+import javax.swing.SwingConstants;
+
+import studio.graph.Node;
+import studio.graph.Parameter;
+import studio.graph.PortTypes;
+import studio.save.PflowReader;
+
+/**
+ * Right-side panel that auto-generates widgets for the parameters of the
+ * currently selected node. v1 selects via a combo box at the top because
+ * there's no graph-editor canvas yet.
+ */
+public final class ParameterPanel extends JPanel {
+
+    private final JComboBox<NodeChoice> nodePicker = new JComboBox<>();
+    private final JPanel body = new JPanel();
+
+    @SuppressWarnings("unused")
+    private final StudioModel model;
+
+    public ParameterPanel(StudioModel model) {
+        super(new BorderLayout());
+        this.model = model;
+        setBorder(BorderFactory.createTitledBorder("Parameters"));
+
+        body.setLayout(new BoxLayout(body, BoxLayout.Y_AXIS));
+        JScrollPane scroll = new JScrollPane(body);
+        scroll.getVerticalScrollBar().setUnitIncrement(16);
+
+        JPanel top = new JPanel(new BorderLayout(4, 4));
+        top.setBorder(BorderFactory.createEmptyBorder(4, 6, 4, 6));
+        top.add(new JLabel("Node"), BorderLayout.WEST);
+        top.add(nodePicker, BorderLayout.CENTER);
+
+        add(top, BorderLayout.NORTH);
+        add(scroll, BorderLayout.CENTER);
+
+        nodePicker.addActionListener(e -> rebuildBody());
+    }
+
+    public void attachGraph(PflowReader.Result loaded) {
+        nodePicker.removeAllItems();
+        for (Node n : loaded.graph.nodes()) {
+            if (!n.parameters().isEmpty()) {
+                nodePicker.addItem(new NodeChoice(n));
+            }
+        }
+        rebuildBody();
+    }
+
+    private void rebuildBody() {
+        body.removeAll();
+        NodeChoice choice = (NodeChoice) nodePicker.getSelectedItem();
+        if (choice != null) {
+            for (Parameter<?> p : choice.node.parameters()) {
+                body.add(buildRow(p));
+                body.add(Box.createVerticalStrut(2));
+            }
+        }
+        body.add(Box.createVerticalGlue());
+        body.revalidate();
+        body.repaint();
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private JComponent buildRow(Parameter<?> p) {
+        JPanel row = new JPanel(new BorderLayout(6, 0));
+        row.setBorder(BorderFactory.createEmptyBorder(2, 6, 2, 6));
+        JLabel label = new JLabel(p.label);
+        label.setHorizontalAlignment(SwingConstants.LEFT);
+        label.setPreferredSize(new java.awt.Dimension(160, 22));
+        row.add(label, BorderLayout.WEST);
+
+        if (p.type == PortTypes.SCALAR) {
+            row.add(buildFloatWidget((Parameter<Float>) p), BorderLayout.CENTER);
+        } else if (p.type == PortTypes.INT) {
+            row.add(buildIntWidget((Parameter<Integer>) p), BorderLayout.CENTER);
+        } else if (p.type == PortTypes.BOOL) {
+            row.add(buildBoolWidget((Parameter<Boolean>) p), BorderLayout.CENTER);
+        } else if (p.type == PortTypes.VEC2 || p.type == PortTypes.VEC3) {
+            row.add(buildVecWidget((Parameter<float[]>) p, p.type == PortTypes.VEC3 ? 3 : 2), BorderLayout.CENTER);
+        } else if (p.type == PortTypes.VEC4) {
+            if (p.uiHint == Parameter.UiHint.COLOR_RGBA) {
+                row.add(buildColorWidget((Parameter<float[]>) p), BorderLayout.CENTER);
+            } else {
+                row.add(buildVecWidget((Parameter<float[]>) p, 4), BorderLayout.CENTER);
+            }
+        } else {
+            JLabel placeholder = new JLabel("(unsupported: " + p.type.id + ")");
+            placeholder.setForeground(Color.LIGHT_GRAY);
+            row.add(placeholder, BorderLayout.CENTER);
+        }
+        return row;
+    }
+
+    private JComponent buildFloatWidget(Parameter<Float> p) {
+        float lo = p.min != null ? p.min : 0f;
+        float hi = p.max != null ? p.max : Math.max(1f, p.get() * 2f);
+        int slots = 1000;
+        JSlider slider = new JSlider(0, slots);
+        slider.setValue(toSlider(p.get(), lo, hi, slots));
+
+        NumberFormat fmt = NumberFormat.getNumberInstance();
+        fmt.setMinimumFractionDigits(2);
+        fmt.setMaximumFractionDigits(4);
+        JFormattedTextField text = new JFormattedTextField(fmt);
+        text.setColumns(6);
+        text.setValue(p.get());
+
+        slider.addChangeListener(e -> {
+            float v = fromSlider(slider.getValue(), lo, hi, slots);
+            if (!Float.valueOf(v).equals(p.get())) {
+                p.set(v);
+                text.setValue(v);
+            }
+        });
+        text.addPropertyChangeListener("value", e -> {
+            if (text.getValue() instanceof Number n) {
+                float v = clamp(n.floatValue(), lo, hi);
+                if (!Float.valueOf(v).equals(p.get())) {
+                    p.set(v);
+                    slider.setValue(toSlider(v, lo, hi, slots));
+                }
+            }
+        });
+
+        JPanel wrap = new JPanel(new BorderLayout(4, 0));
+        wrap.add(slider, BorderLayout.CENTER);
+        wrap.add(text, BorderLayout.EAST);
+        return wrap;
+    }
+
+    private JComponent buildIntWidget(Parameter<Integer> p) {
+        int lo = p.min != null ? p.min : 0;
+        int hi = p.max != null ? p.max : Math.max(100, p.get() * 2);
+        SpinnerNumberModel snm = new SpinnerNumberModel(p.get().intValue(), lo, hi, 1);
+        JSpinner spinner = new JSpinner(snm);
+        spinner.addChangeListener(e -> {
+            int v = (Integer) spinner.getValue();
+            if (!Integer.valueOf(v).equals(p.get())) p.set(v);
+        });
+        return spinner;
+    }
+
+    private JComponent buildBoolWidget(Parameter<Boolean> p) {
+        JCheckBox cb = new JCheckBox();
+        cb.setSelected(Boolean.TRUE.equals(p.get()));
+        cb.addItemListener(e -> p.set(cb.isSelected()));
+        return cb;
+    }
+
+    private JComponent buildVecWidget(Parameter<float[]> p, int n) {
+        JPanel row = new JPanel();
+        row.setLayout(new BoxLayout(row, BoxLayout.X_AXIS));
+        float[] current = p.get() != null ? p.get() : new float[n];
+        JTextField[] fields = new JTextField[n];
+        for (int i = 0; i < n; i++) {
+            final int idx = i;
+            JTextField tf = new JTextField(Float.toString(current[idx]), 5);
+            fields[i] = tf;
+            tf.addActionListener(new AbstractAction() {
+                @Override public void actionPerformed(ActionEvent e) {
+                    pushVec(p, fields);
+                }
+            });
+            row.add(tf);
+            if (i < n - 1) row.add(Box.createHorizontalStrut(3));
+        }
+        return row;
+    }
+
+    private void pushVec(Parameter<float[]> p, JTextField[] fields) {
+        float[] out = new float[fields.length];
+        for (int i = 0; i < fields.length; i++) {
+            try { out[i] = Float.parseFloat(fields[i].getText()); }
+            catch (NumberFormatException ignored) { out[i] = 0f; }
+        }
+        p.set(out);
+    }
+
+    private JComponent buildColorWidget(Parameter<float[]> p) {
+        JPanel swatch = new JPanel();
+        float[] c = p.get();
+        Color initial = new Color(c[0], c[1], c[2], c.length > 3 ? c[3] : 1f);
+        swatch.setBackground(initial);
+        swatch.setBorder(BorderFactory.createLineBorder(Color.GRAY));
+        swatch.setPreferredSize(new java.awt.Dimension(48, 22));
+        swatch.addMouseListener(new java.awt.event.MouseAdapter() {
+            @Override public void mouseClicked(java.awt.event.MouseEvent e) {
+                Color chosen = JColorChooser.showDialog(swatch, "Pick color", swatch.getBackground());
+                if (chosen == null) return;
+                float[] out = chosen.getComponents(null);
+                p.set(out);
+                swatch.setBackground(chosen);
+            }
+        });
+        return swatch;
+    }
+
+    /* ------------------------------ helpers ------------------------------ */
+
+    private static int toSlider(float v, float lo, float hi, int slots) {
+        if (hi <= lo) return 0;
+        return Math.max(0, Math.min(slots, Math.round(((v - lo) / (hi - lo)) * slots)));
+    }
+    private static float fromSlider(int slider, float lo, float hi, int slots) {
+        return lo + (slider / (float) slots) * (hi - lo);
+    }
+    private static float clamp(float v, float lo, float hi) {
+        return Math.max(lo, Math.min(hi, v));
+    }
+
+    /** Combo-box entry — wraps a Node to render a human label. */
+    private static final class NodeChoice {
+        final Node node;
+        NodeChoice(Node node) { this.node = node; }
+        @Override public String toString() {
+            return node.label() + "  [" + node.typeId() + "]";
+        }
+    }
+}

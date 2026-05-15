@@ -26,7 +26,7 @@ public final class Parameter<T> {
     public boolean structural;
     public String description;
 
-    private T value;
+    private volatile T value;
     private final List<Consumer<T>> listeners = new ArrayList<>();
 
     public Parameter(String name, PortType<T> type, T defaultValue) {
