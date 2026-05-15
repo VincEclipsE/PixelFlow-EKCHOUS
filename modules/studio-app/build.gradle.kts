@@ -22,3 +22,14 @@ dependencies {
 application {
     mainClass.set(providers.gradleProperty("mainClass").orElse("studio.Main"))
 }
+
+tasks.named<JavaExec>("run") {
+    // Forward -Pproject / -Pframes / -Pout to the JVM as system properties so
+    // headless tools (studio.headless.HeadlessSmoke) can read them.
+    providers.gradleProperty("project").orNull?.let { systemProperty("project", it) }
+    providers.gradleProperty("frames" ).orNull?.let { systemProperty("frames",  it) }
+    providers.gradleProperty("out"    ).orNull?.let { systemProperty("out",     it) }
+    // Run from the repo root so default relative paths (e.g. "starters/...")
+    // resolve to the project tree rather than build/install.
+    workingDir = rootProject.projectDir
+}

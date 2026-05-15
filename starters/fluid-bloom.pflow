@@ -1,0 +1,51 @@
+{
+  "schema": "pflow/1",
+  "name": "Fluid + Bloom (M2 smoke)",
+  "output": {
+    "width": 800,
+    "height": 800,
+    "frames": 60,
+    "rootOutputNode": "n-screen"
+  },
+  "nodes": [
+    {
+      "id": "n-fluid",
+      "typeId": "pf.fluid.DwFluid2D",
+      "label": "fluid",
+      "params": {
+        "width": 800,
+        "height": 800,
+        "grid_scale": 1,
+        "dissipation_velocity": 0.85,
+        "dissipation_density": 0.99,
+        "vorticity": 0.15,
+        "jacobi_iterations": 30,
+        "inject_color": [1.0, 0.45, 0.05, 1.0],
+        "inject_radius": 30.0,
+        "inject_pos": [400.0, 200.0],
+        "inject_velocity": [0.0, 80.0]
+      }
+    },
+    {
+      "id": "n-bloom",
+      "typeId": "pf.filter.Bloom",
+      "label": "bloom",
+      "params": {
+        "mult": 1.6,
+        "radius": 0.65,
+        "blur_radius": 3
+      }
+    },
+    {
+      "id": "n-screen",
+      "typeId": "studio.builtin.GraphOutput",
+      "label": "output"
+    }
+  ],
+  "edges": [
+    { "from": { "node": "n-fluid", "port": "density" },
+      "to":   { "node": "n-bloom", "port": "src" } },
+    { "from": { "node": "n-bloom", "port": "dst" },
+      "to":   { "node": "n-screen", "port": "in" } }
+  ]
+}
