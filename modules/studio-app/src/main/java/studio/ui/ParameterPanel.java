@@ -125,7 +125,22 @@ public final class ParameterPanel extends JPanel {
         JLabel label = new JLabel(p.label);
         label.setHorizontalAlignment(SwingConstants.LEFT);
         label.setPreferredSize(new java.awt.Dimension(160, 22));
+        if (p.description != null && !p.description.isBlank()) {
+            label.setToolTipText(p.description);
+        }
         row.add(label, BorderLayout.WEST);
+
+        // Reset-to-default button (east). Skip for unsupported types.
+        Parameter rawP = p;
+        javax.swing.JButton reset = new javax.swing.JButton("↺");
+        reset.setMargin(new java.awt.Insets(0, 4, 0, 4));
+        reset.setToolTipText("Reset to default" + (p.defaultValue == null ? "" : " (" + describeDefault(p) + ")"));
+        reset.setFocusable(false);
+        reset.addActionListener(e -> {
+            if (p.defaultValue != null) rawP.set(p.defaultValue);
+            rebuildBody();
+        });
+        row.add(reset, BorderLayout.EAST);
 
         if (p.type == PortTypes.SCALAR) {
             row.add(buildFloatWidget((Parameter<Float>) p), BorderLayout.CENTER);
@@ -234,6 +249,20 @@ public final class ParameterPanel extends JPanel {
             catch (NumberFormatException ignored) { out[i] = 0f; }
         }
         p.set(out);
+    }
+
+    private static String describeDefault(Parameter<?> p) {
+        Object v = p.defaultValue;
+        if (v == null) return "null";
+        if (v instanceof float[] arr) {
+            StringBuilder sb = new StringBuilder("[");
+            for (int i = 0; i < arr.length; i++) {
+                if (i > 0) sb.append(", ");
+                sb.append(arr[i]);
+            }
+            return sb.append("]").toString();
+        }
+        return v.toString();
     }
 
     private JComponent buildStringWidget(Parameter<String> p) {
