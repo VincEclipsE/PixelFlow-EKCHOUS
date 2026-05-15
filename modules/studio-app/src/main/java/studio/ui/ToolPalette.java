@@ -121,6 +121,8 @@ public final class ToolPalette extends JPanel {
         ids.add(studio.nodes.filter.BinomialBlurNode.TYPE_ID);
         ids.add(studio.nodes.filter.LiquidFxNode.TYPE_ID);
         ids.add(studio.nodes.image.OpticalFlowNode.TYPE_ID);
+        ids.add(studio.nodes.filter.LaplaceNode.TYPE_ID);
+        ids.add(studio.nodes.filter.ClampNode.TYPE_ID);
         ids.add(studio.nodes.aa.FxaaNode.TYPE_ID);
         ids.add(studio.nodes.flowfield.FlowFieldNode.TYPE_ID);
         ids.add(GraphOutputNode.TYPE_ID);
