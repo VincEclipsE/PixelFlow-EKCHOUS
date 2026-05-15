@@ -19,27 +19,39 @@ public final class Graph {
     private List<Node> topoCache;
     private boolean topoDirty = true;
 
-    public void addNode(Node n) {
+    public synchronized void addNode(Node n) {
         if (nodes.put(n.id(), n) != null) {
             throw new IllegalArgumentException("duplicate node id: " + n.id());
         }
         topoDirty = true;
     }
 
-    public Node node(NodeId id) {
+    /**
+     * Remove a node and any edges incident to it.
+     * Returns the removed Node, or null if the id wasn't present.
+     */
+    public synchronized Node removeNode(NodeId id) {
+        Node removed = nodes.remove(id);
+        if (removed == null) return null;
+        edges.removeIf(e -> e.from.owner == removed || e.to.owner == removed);
+        topoDirty = true;
+        return removed;
+    }
+
+    public synchronized Node node(NodeId id) {
         return nodes.get(id);
     }
 
-    public List<Node> nodes() {
+    public synchronized List<Node> nodes() {
         return List.copyOf(nodes.values());
     }
 
-    public List<Edge> edges() {
-        return Collections.unmodifiableList(edges);
+    public synchronized List<Edge> edges() {
+        return List.copyOf(edges);
     }
 
     /** Add an edge. Performs a cycle check; throws on type mismatch or cycle. */
-    public Edge connect(OutputPort<?> from, InputPort<?> to) {
+    public synchronized Edge connect(OutputPort<?> from, InputPort<?> to) {
         Objects.requireNonNull(from); Objects.requireNonNull(to);
         if (from.owner == to.owner) {
             throw new IllegalArgumentException("self-loop: " + from + " -> " + to);
@@ -49,6 +61,8 @@ public final class Graph {
                     "type mismatch: " + from.type + " not assignable to " + to.type
                     + " (" + from + " -> " + to + ")");
         }
+        // Replace any existing edge into the same input port — input ports are 1:1.
+        edges.removeIf(e -> e.to == to);
         Edge e = new Edge(from, to);
         edges.add(e);
         if (hasCycle()) {
@@ -59,7 +73,14 @@ public final class Graph {
         return e;
     }
 
-    public List<Node> topology() {
+    /** Remove an edge. Returns true if it existed. */
+    public synchronized boolean disconnect(Edge edge) {
+        boolean removed = edges.remove(edge);
+        if (removed) topoDirty = true;
+        return removed;
+    }
+
+    public synchronized List<Node> topology() {
         if (topoDirty || topoCache == null) {
             topoCache = TopologicalSort.sort(this);
             topoDirty = false;
@@ -68,7 +89,7 @@ public final class Graph {
     }
 
     /** Find the producer-side edge feeding a given input port, or null if unconnected. */
-    public Edge edgeInto(InputPort<?> in) {
+    public synchronized Edge edgeInto(InputPort<?> in) {
         for (Edge e : edges) {
             if (e.to == in) return e;
         }

@@ -59,7 +59,7 @@ public final class MainFrame extends JFrame {
         PflowReader reader = new PflowReader(HeadlessSmoke.defaultRegistry());
         this.model = new StudioModel(reader);
 
-        this.editor = new NodeEditorPanel();
+        this.editor = new NodeEditorPanel(HeadlessSmoke.defaultRegistry());
         this.preview = new GLPreviewPanel(model);
         this.parameters = new ParameterPanel(model);
         this.palette = new ToolPalette(HeadlessSmoke.defaultRegistry());

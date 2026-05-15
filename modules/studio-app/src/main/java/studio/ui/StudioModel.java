@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.function.Consumer;
 
 import studio.save.PflowReader;
+import studio.save.PflowWriter;
 
 /**
  * Application-level state for the Studio. Holds the path of the currently
@@ -48,5 +49,19 @@ public final class StudioModel {
 
     public void addProjectLoadedListener(Consumer<PflowReader.Result> listener) {
         listeners.add(listener);
+    }
+
+    /** Write the current graph back to its source path. */
+    public void save() throws IOException {
+        if (currentPath == null) throw new IOException("no project loaded; use Save As");
+        if (current == null) throw new IOException("no graph loaded");
+        PflowWriter.write(currentPath, current.graph, current.source);
+    }
+
+    /** Write the current graph to a new path. The model adopts that path. */
+    public void saveAs(Path path) throws IOException {
+        if (current == null) throw new IOException("no graph loaded");
+        PflowWriter.write(path, current.graph, current.source);
+        currentPath = path;
     }
 }

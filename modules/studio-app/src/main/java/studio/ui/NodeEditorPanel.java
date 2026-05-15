@@ -7,9 +7,17 @@ import java.awt.Graphics;
 import java.awt.Graphics2D;
 import java.awt.Point;
 import java.awt.RenderingHints;
+import java.awt.datatransfer.DataFlavor;
+import java.awt.dnd.DnDConstants;
+import java.awt.dnd.DropTarget;
+import java.awt.dnd.DropTargetDragEvent;
+import java.awt.dnd.DropTargetDropEvent;
+import java.awt.dnd.DropTargetEvent;
+import java.awt.dnd.DropTargetListener;
+import java.awt.event.KeyAdapter;
+import java.awt.event.KeyEvent;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
-import java.awt.event.MouseMotionAdapter;
 import java.awt.event.MouseWheelEvent;
 import java.awt.event.MouseWheelListener;
 import java.awt.geom.AffineTransform;
@@ -29,6 +37,7 @@ import javax.swing.JPanel;
 import studio.graph.Edge;
 import studio.graph.InputPort;
 import studio.graph.Node;
+import studio.graph.NodeFactoryRegistry;
 import studio.graph.OutputPort;
 import studio.save.PflowReader;
 
@@ -69,16 +78,63 @@ public final class NodeEditorPanel extends JPanel {
     private Point2D dragNodeOffset;
     private Point dragPanStart;
     private double dragPanStartX, dragPanStartY;
+    private OutputPort<?> wireFromPort;     // start of an in-progress edge drag
+    private Point2D wireDragCurrent;        // current mouse position in graph space
 
-    public NodeEditorPanel() {
+    private final NodeFactoryRegistry registry;
+
+    public NodeEditorPanel(NodeFactoryRegistry registry) {
+        this.registry = registry;
         setBackground(new Color(20, 20, 24));
         setOpaque(true);
         setPreferredSize(new Dimension(800, 600));
+        setFocusable(true);
 
         MouseHandler m = new MouseHandler();
         addMouseListener(m);
         addMouseMotionListener(m);
         addMouseWheelListener(m);
+
+        addKeyListener(new KeyAdapter() {
+            @Override public void keyPressed(KeyEvent e) {
+                if (e.getKeyCode() == KeyEvent.VK_DELETE && selected != null && current != null) {
+                    current.graph.removeNode(selected.id());
+                    layouts.remove(selected);
+                    setSelection(null);
+                    repaint();
+                }
+            }
+        });
+
+        // Accept palette drops to add a new node at the cursor position.
+        new DropTarget(this, DnDConstants.ACTION_COPY, new DropTargetListener() {
+            @Override public void dragEnter(DropTargetDragEvent e) {}
+            @Override public void dragOver(DropTargetDragEvent e) {}
+            @Override public void dropActionChanged(DropTargetDragEvent e) {}
+            @Override public void dragExit(DropTargetEvent e) {}
+            @Override public void drop(DropTargetDropEvent e) {
+                try {
+                    e.acceptDrop(DnDConstants.ACTION_COPY);
+                    Object data = e.getTransferable().getTransferData(DataFlavor.stringFlavor);
+                    String typeId = data == null ? null : data.toString();
+                    if (typeId != null && current != null) {
+                        Node added = registry.create(typeId);
+                        current.graph.addNode(added);
+                        Point2D world = screenToWorld(e.getLocation());
+                        layouts.put(added, new Layout(
+                                (int) Math.round(world.getX() - NODE_WIDTH / 2.0),
+                                (int) Math.round(world.getY() - NODE_HEADER / 2.0)));
+                        if (current.nodesById != null) current.nodesById.put(added.id().value, added);
+                        setSelection(added);
+                        repaint();
+                    }
+                    e.dropComplete(true);
+                } catch (Exception ex) {
+                    System.err.println("palette drop failed: " + ex.getMessage());
+                    e.dropComplete(false);
+                }
+            }
+        });
     }
 
     public void attachGraph(PflowReader.Result loaded) {
@@ -142,6 +198,22 @@ public final class NodeEditorPanel extends JPanel {
         drawGrid(g);
         for (Edge e : current.graph.edges()) drawEdge(g, e);
         for (Node n : current.graph.nodes()) drawNode(g, n);
+
+        if (wireFromPort != null && wireDragCurrent != null) {
+            Point2D from = outputPortPos(wireFromPort);
+            if (from != null) {
+                double dx = Math.max(40, (wireDragCurrent.getX() - from.getX()) * 0.5);
+                CubicCurve2D pending = new CubicCurve2D.Double(
+                        from.getX(), from.getY(),
+                        from.getX() + dx, from.getY(),
+                        wireDragCurrent.getX() - dx, wireDragCurrent.getY(),
+                        wireDragCurrent.getX(), wireDragCurrent.getY());
+                g.setStroke(new BasicStroke(2.5f, BasicStroke.CAP_ROUND, BasicStroke.JOIN_ROUND,
+                        1f, new float[]{ 8f, 6f }, 0f));
+                g.setColor(new Color(255, 196, 64, 220));
+                g.draw(pending);
+            }
+        }
 
         g.setTransform(original);
         g.dispose();
@@ -274,6 +346,62 @@ public final class NodeEditorPanel extends JPanel {
         return null;
     }
 
+    private OutputPort<?> hitOutputPort(Point screen) {
+        if (current == null) return null;
+        Point2D world = screenToWorld(screen);
+        for (Node n : current.graph.nodes()) {
+            for (OutputPort<?> p : n.outputs()) {
+                Point2D pos = outputPortPos(p);
+                if (pos != null && pos.distance(world) <= PORT_RADIUS + 2) return p;
+            }
+        }
+        return null;
+    }
+
+    private InputPort<?> hitInputPort(Point screen) {
+        if (current == null) return null;
+        Point2D world = screenToWorld(screen);
+        for (Node n : current.graph.nodes()) {
+            for (InputPort<?> p : n.inputs()) {
+                Point2D pos = inputPortPos(p);
+                if (pos != null && pos.distance(world) <= PORT_RADIUS + 2) return p;
+            }
+        }
+        return null;
+    }
+
+    private Edge hitEdge(Point screen) {
+        if (current == null) return null;
+        Point2D world = screenToWorld(screen);
+        Edge best = null;
+        double bestDist = 10.0;
+        for (Edge e : current.graph.edges()) {
+            Point2D from = outputPortPos(e.from);
+            Point2D to   = inputPortPos(e.to);
+            if (from == null || to == null) continue;
+            double dx = Math.max(40, (to.getX() - from.getX()) * 0.5);
+            double[] ctrl = {
+                    from.getX(), from.getY(),
+                    from.getX() + dx, from.getY(),
+                    to.getX() - dx, to.getY(),
+                    to.getX(), to.getY()
+            };
+            for (int i = 0; i <= 16; i++) {
+                double t = i / 16.0;
+                double x = bezier(ctrl[0], ctrl[2], ctrl[4], ctrl[6], t);
+                double y = bezier(ctrl[1], ctrl[3], ctrl[5], ctrl[7], t);
+                double d = world.distance(x, y);
+                if (d < bestDist) { bestDist = d; best = e; }
+            }
+        }
+        return best;
+    }
+
+    private static double bezier(double p0, double p1, double p2, double p3, double t) {
+        double mt = 1 - t;
+        return mt * mt * mt * p0 + 3 * mt * mt * t * p1 + 3 * mt * t * t * p2 + t * t * t * p3;
+    }
+
     private Point2D screenToWorld(Point p) {
         return new Point2D.Double((p.x - panX) / zoom, (p.y - panY) / zoom);
     }
@@ -295,6 +423,21 @@ public final class NodeEditorPanel extends JPanel {
                 dragPanStartY = panY;
                 return;
             }
+            if (e.getButton() == MouseEvent.BUTTON3) {
+                Edge hit = hitEdge(e.getPoint());
+                if (hit != null && current != null) {
+                    current.graph.disconnect(hit);
+                    repaint();
+                }
+                return;
+            }
+            OutputPort<?> op = hitOutputPort(e.getPoint());
+            if (op != null && e.getButton() == MouseEvent.BUTTON1) {
+                wireFromPort = op;
+                wireDragCurrent = screenToWorld(e.getPoint());
+                repaint();
+                return;
+            }
             Node hit = hitTest(e.getPoint());
             setSelection(hit);
             if (hit != null && e.getButton() == MouseEvent.BUTTON1) {
@@ -306,11 +449,29 @@ public final class NodeEditorPanel extends JPanel {
         }
 
         @Override public void mouseReleased(MouseEvent e) {
+            if (wireFromPort != null) {
+                InputPort<?> dst = hitInputPort(e.getPoint());
+                if (dst != null && current != null) {
+                    try {
+                        current.graph.connect(wireFromPort, dst);
+                    } catch (IllegalArgumentException ex) {
+                        System.err.println("connect failed: " + ex.getMessage());
+                    }
+                }
+                wireFromPort = null;
+                wireDragCurrent = null;
+                repaint();
+            }
             draggingNode = null;
             dragPanStart = null;
         }
 
         @Override public void mouseDragged(MouseEvent e) {
+            if (wireFromPort != null) {
+                wireDragCurrent = screenToWorld(e.getPoint());
+                repaint();
+                return;
+            }
             if (draggingNode != null) {
                 Point2D world = screenToWorld(e.getPoint());
                 Layout L = layoutOf(draggingNode);
@@ -324,7 +485,6 @@ public final class NodeEditorPanel extends JPanel {
             }
         }
 
-        // Plain MouseAdapter.mouseMoved is unused here.
         @Override public void mouseMoved(MouseEvent e) {}
 
         @Override public void mouseWheelMoved(MouseWheelEvent e) {
