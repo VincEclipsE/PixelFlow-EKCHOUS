@@ -82,9 +82,32 @@ public final class NodeEditorPanel extends JPanel {
     private Point2D wireDragCurrent;        // current mouse position in graph space
 
     private final NodeFactoryRegistry registry;
+    private final studio.graph.UndoStack undo = new studio.graph.UndoStack();
     private StatusBar statusBar;
 
+    // Move tracking: position at mousePressed → diff on mouseReleased
+    private int dragStartX, dragStartY;
+
     public void setStatusBar(StatusBar bar) { this.statusBar = bar; }
+
+    public boolean canUndo() { return undo.canUndo(); }
+    public boolean canRedo() { return undo.canRedo(); }
+
+    public void undo() {
+        var c = undo.undo();
+        if (c != null) {
+            if (statusBar != null) statusBar.info("Undid: " + c.description());
+            repaint();
+        }
+    }
+
+    public void redo() {
+        var c = undo.redo();
+        if (c != null) {
+            if (statusBar != null) statusBar.info("Redid: " + c.description());
+            repaint();
+        }
+    }
 
     public NodeEditorPanel(NodeFactoryRegistry registry) {
         this.registry = registry;
@@ -113,6 +136,15 @@ public final class NodeEditorPanel extends JPanel {
                 }
                 if (code == KeyEvent.VK_F) {
                     frameAll();
+                    return;
+                }
+                if (e.isControlDown() && code == KeyEvent.VK_Z && !e.isShiftDown()) {
+                    undo();
+                    return;
+                }
+                if ((e.isControlDown() && code == KeyEvent.VK_Y)
+                        || (e.isControlDown() && e.isShiftDown() && code == KeyEvent.VK_Z)) {
+                    redo();
                     return;
                 }
                 if (e.isControlDown() && code == KeyEvent.VK_V) {
@@ -147,14 +179,11 @@ public final class NodeEditorPanel extends JPanel {
                     String typeId = data == null ? null : data.toString();
                     if (typeId != null && current != null) {
                         Node added = registry.create(typeId);
-                        current.graph.addNode(added);
                         Point2D world = screenToWorld(e.getLocation());
-                        layouts.put(added, new Layout(
-                                (int) Math.round(world.getX() - NODE_WIDTH / 2.0),
-                                (int) Math.round(world.getY() - NODE_HEADER / 2.0)));
-                        if (current.nodesById != null) current.nodesById.put(added.id().value, added);
+                        int x = (int) Math.round(world.getX() - NODE_WIDTH / 2.0);
+                        int y = (int) Math.round(world.getY() - NODE_HEADER / 2.0);
+                        doAddNode(added, x, y);
                         setSelection(added);
-                        repaint();
                     }
                     e.dropComplete(true);
                 } catch (Exception ex) {
@@ -168,6 +197,7 @@ public final class NodeEditorPanel extends JPanel {
     public void attachGraph(PflowReader.Result loaded) {
         this.current = loaded;
         this.selected = null;
+        this.undo.clear();
         autoLayout(loaded);
         // Apply any saved per-node positions from the .pflow file
         if (loaded.source != null && loaded.source.nodes != null) {
@@ -217,29 +247,170 @@ public final class NodeEditorPanel extends JPanel {
 
     public void deleteSelected() {
         if (selected == null || current == null) return;
-        current.graph.removeNode(selected.id());
-        layouts.remove(selected);
+        Node target = selected;
         setSelection(null);
-        repaint();
+        doRemoveNode(target);
     }
 
     public void toggleMuteSelected() {
         if (selected == null) return;
-        boolean wasOn = selected.isEnabled();
-        selected.setEnabled(!wasOn);
+        final Node n = selected;
+        final boolean newOn = !n.isEnabled();
+        n.setEnabled(newOn);
         if (statusBar != null) {
-            statusBar.info((wasOn ? "Muted " : "Enabled ") + selected.label());
+            statusBar.info((newOn ? "Enabled " : "Muted ") + n.label());
         }
+        undo.push(new studio.graph.UndoStack.Command() {
+            @Override public void apply()  { n.setEnabled(newOn);  repaint(); }
+            @Override public void revert() { n.setEnabled(!newOn); repaint(); }
+            @Override public String description() { return (newOn ? "enable " : "mute ") + n.label(); }
+        });
         repaint();
     }
 
     public void cutSelected() {
         if (selected == null || current == null) return;
         copySelectedToClipboard();
-        current.graph.removeNode(selected.id());
-        layouts.remove(selected);
+        Node target = selected;
         setSelection(null);
+        doRemoveNode(target);
+    }
+
+    /** Remove + remember edges so undo can restore them. */
+    private void doRemoveNode(Node n) {
+        final Node node = n;
+        final Layout pos = layouts.get(node);
+        final int posX = pos != null ? pos.x : 0;
+        final int posY = pos != null ? pos.y : 0;
+        // Snapshot all edges that touch this node (graph.removeNode will sever them)
+        final java.util.List<Edge> severed = new java.util.ArrayList<>();
+        for (Edge e : current.graph.edges()) {
+            if (e.from.owner == node || e.to.owner == node) severed.add(e);
+        }
+        // Apply
+        current.graph.removeNode(node.id());
+        layouts.remove(node);
+        if (current.nodesById != null) current.nodesById.remove(node.id().value);
         repaint();
+
+        final java.util.Map<String, studio.graph.Node> nodesByIdRef =
+                current.nodesById != null ? current.nodesById : null;
+        undo.push(new studio.graph.UndoStack.Command() {
+            @Override public void apply() {
+                current.graph.removeNode(node.id());
+                layouts.remove(node);
+                if (nodesByIdRef != null) nodesByIdRef.remove(node.id().value);
+                if (selected == node) setSelection(null);
+                repaint();
+            }
+            @Override public void revert() {
+                current.graph.addNode(node);
+                if (nodesByIdRef != null) nodesByIdRef.put(node.id().value, node);
+                if (pos != null) layouts.put(node, new Layout(posX, posY));
+                for (Edge e : severed) {
+                    try { current.graph.connect(e.from, e.to); }
+                    catch (Exception ignored) { /* skip if endpoints disappeared */ }
+                }
+                repaint();
+            }
+            @Override public String description() { return "remove " + node.label(); }
+        });
+    }
+
+    private void doAddNode(Node n, int x, int y) {
+        final Node node = n;
+        current.graph.addNode(node);
+        if (current.nodesById != null) current.nodesById.put(node.id().value, node);
+        layouts.put(node, new Layout(x, y));
+        final java.util.Map<String, studio.graph.Node> nodesByIdRef =
+                current.nodesById != null ? current.nodesById : null;
+        undo.push(new studio.graph.UndoStack.Command() {
+            @Override public void apply() {
+                current.graph.addNode(node);
+                if (nodesByIdRef != null) nodesByIdRef.put(node.id().value, node);
+                layouts.put(node, new Layout(x, y));
+                repaint();
+            }
+            @Override public void revert() {
+                current.graph.removeNode(node.id());
+                if (nodesByIdRef != null) nodesByIdRef.remove(node.id().value);
+                layouts.remove(node);
+                if (selected == node) setSelection(null);
+                repaint();
+            }
+            @Override public String description() { return "add " + node.label(); }
+        });
+    }
+
+    private void doConnect(OutputPort<?> from, InputPort<?> to) {
+        // Replacement edges into the same input port? graph.connect handles that,
+        // but for undo we need to remember any displaced edge.
+        Edge displaced = null;
+        for (Edge e : current.graph.edges()) if (e.to == to) { displaced = e; break; }
+        final Edge prev = displaced;
+        final Edge created;
+        try {
+            created = current.graph.connect(from, to);
+        } catch (IllegalArgumentException ex) {
+            if (statusBar != null) statusBar.error("Connect failed: " + ex.getMessage());
+            return;
+        }
+        if (statusBar != null) {
+            statusBar.info("Connected " + from.owner.label() + "." + from.name
+                    + " → " + to.owner.label() + "." + to.name);
+        }
+        undo.push(new studio.graph.UndoStack.Command() {
+            @Override public void apply() {
+                current.graph.connect(from, to);
+                repaint();
+            }
+            @Override public void revert() {
+                current.graph.disconnect(created);
+                if (prev != null) {
+                    try { current.graph.connect(prev.from, prev.to); }
+                    catch (Exception ignored) {}
+                }
+                repaint();
+            }
+            @Override public String description() {
+                return "connect " + from.owner.label() + "." + from.name
+                        + " → " + to.owner.label() + "." + to.name;
+            }
+        });
+    }
+
+    private void doDisconnect(Edge e) {
+        final OutputPort<?> from = e.from;
+        final InputPort<?>  to   = e.to;
+        current.graph.disconnect(e);
+        repaint();
+        undo.push(new studio.graph.UndoStack.Command() {
+            @Override public void apply() {
+                Edge edge = null;
+                for (Edge cand : current.graph.edges()) if (cand.from == from && cand.to == to) { edge = cand; break; }
+                if (edge != null) current.graph.disconnect(edge);
+                repaint();
+            }
+            @Override public void revert() {
+                try { current.graph.connect(from, to); }
+                catch (Exception ignored) {}
+                repaint();
+            }
+            @Override public String description() {
+                return "disconnect " + from.owner.label() + "." + from.name
+                        + " → " + to.owner.label() + "." + to.name;
+            }
+        });
+    }
+
+    private void pushMove(Node n, int fromX, int fromY, int toX, int toY) {
+        if (fromX == toX && fromY == toY) return;
+        final Node node = n;
+        undo.push(new studio.graph.UndoStack.Command() {
+            @Override public void apply()  { layouts.put(node, new Layout(toX,   toY));   repaint(); }
+            @Override public void revert() { layouts.put(node, new Layout(fromX, fromY)); repaint(); }
+            @Override public String description() { return "move " + node.label(); }
+        });
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
@@ -289,14 +460,10 @@ public final class NodeEditorPanel extends JPanel {
                     if (coerced != null) ((studio.graph.Parameter) p).set(coerced);
                 }
             }
-            current.graph.addNode(node);
-            if (current.nodesById != null) current.nodesById.put(node.id().value, node);
-            // Position near selection or at canvas center
             Layout origin = selected != null ? layoutOf(selected) : new Layout(LAYOUT_ORIGIN_X, LAYOUT_ORIGIN_Y);
-            layouts.put(node, new Layout(origin.x + 24, origin.y + 24));
+            doAddNode(node, origin.x + 24, origin.y + 24);
             setSelection(node);
             if (statusBar != null) statusBar.info("Pasted " + node.label());
-            repaint();
         } catch (Exception ex) {
             if (statusBar != null) statusBar.error("Paste failed: " + ex.getMessage());
         }
@@ -317,13 +484,10 @@ public final class NodeEditorPanel extends JPanel {
             studio.graph.Parameter cp = (studio.graph.Parameter) copy.parameter(sp.name);
             if (cp != null) cp.set(sp.get());
         }
-        current.graph.addNode(copy);
-        if (current.nodesById != null) current.nodesById.put(copy.id().value, copy);
         Layout L = layoutOf(src);
-        layouts.put(copy, new Layout(L.x + 24, L.y + 24));
+        doAddNode(copy, L.x + 24, L.y + 24);
         setSelection(copy);
         if (statusBar != null) statusBar.info("Duplicated " + src.label());
-        repaint();
     }
 
     /** Read-only view of node→(x,y) so the writer can persist layout. */
@@ -746,8 +910,7 @@ public final class NodeEditorPanel extends JPanel {
             if (e.getButton() == MouseEvent.BUTTON3) {
                 Edge hit = hitEdge(e.getPoint());
                 if (hit != null && current != null) {
-                    current.graph.disconnect(hit);
-                    repaint();
+                    doDisconnect(hit);
                 }
                 return;
             }
@@ -765,6 +928,8 @@ public final class NodeEditorPanel extends JPanel {
                 Point2D world = screenToWorld(e.getPoint());
                 Layout L = layoutOf(hit);
                 dragNodeOffset = new Point2D.Double(world.getX() - L.x, world.getY() - L.y);
+                dragStartX = L.x;
+                dragStartY = L.y;
             }
         }
 
@@ -772,20 +937,15 @@ public final class NodeEditorPanel extends JPanel {
             if (wireFromPort != null) {
                 InputPort<?> dst = hitInputPort(e.getPoint());
                 if (dst != null && current != null) {
-                    try {
-                        current.graph.connect(wireFromPort, dst);
-                        if (statusBar != null) {
-                            statusBar.info("Connected " + wireFromPort.owner.label() + "." + wireFromPort.name
-                                    + " → " + dst.owner.label() + "." + dst.name);
-                        }
-                    } catch (IllegalArgumentException ex) {
-                        if (statusBar != null) statusBar.error("Connect failed: " + ex.getMessage());
-                        else System.err.println("connect failed: " + ex.getMessage());
-                    }
+                    doConnect(wireFromPort, dst);
                 }
                 wireFromPort = null;
                 wireDragCurrent = null;
                 repaint();
+            }
+            if (draggingNode != null) {
+                Layout L = layoutOf(draggingNode);
+                pushMove(draggingNode, dragStartX, dragStartY, L.x, L.y);
             }
             draggingNode = null;
             dragPanStart = null;

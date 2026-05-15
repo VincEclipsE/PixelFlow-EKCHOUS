@@ -173,6 +173,18 @@ public final class MainFrame extends JFrame {
         bar.add(fileMenu);
 
         JMenu editMenu = new JMenu("Edit");
+        JMenuItem undoItem = new JMenuItem("Undo");
+        undoItem.setAccelerator(KeyStroke.getKeyStroke("ctrl Z"));
+        undoItem.addActionListener(e -> editor.undo());
+        editMenu.add(undoItem);
+
+        JMenuItem redoItem = new JMenuItem("Redo");
+        redoItem.setAccelerator(KeyStroke.getKeyStroke("ctrl Y"));
+        redoItem.addActionListener(e -> editor.redo());
+        editMenu.add(redoItem);
+
+        editMenu.addSeparator();
+
         JMenuItem duplicate = new JMenuItem("Duplicate Selected");
         duplicate.addActionListener(e -> editor.duplicateSelected());
         editMenu.add(duplicate);
@@ -245,6 +257,10 @@ public final class MainFrame extends JFrame {
                   M                    Mute / unmute (skip per-frame eval)
                   Ctrl+D               Duplicate
                   Ctrl+C / Ctrl+V      Copy / paste (system clipboard)
+
+                Editing
+                  Ctrl+Z               Undo
+                  Ctrl+Y / Ctrl+Shift+Z  Redo
 
                 File
                   Ctrl+O   Open       Ctrl+S   Save
