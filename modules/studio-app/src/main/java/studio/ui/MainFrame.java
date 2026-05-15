@@ -156,6 +156,13 @@ public final class MainFrame extends JFrame {
         saveAs.addActionListener(e -> saveProjectAs());
         fileMenu.add(saveAs);
 
+        JMenuItem exportPng = new JMenuItem("Export PNG…");
+        exportPng.setAccelerator(KeyStroke.getKeyStroke("ctrl shift P"));
+        exportPng.addActionListener(e -> exportPng());
+        fileMenu.add(exportPng);
+
+        fileMenu.addSeparator();
+
         JMenuItem saveAsTool = new JMenuItem("Save as Tool…");
         saveAsTool.setAccelerator(KeyStroke.getKeyStroke("ctrl T"));
         saveAsTool.addActionListener(e -> {
@@ -283,6 +290,7 @@ public final class MainFrame extends JFrame {
                   Ctrl+O   Open       Ctrl+S   Save
                   Ctrl+Shift+S Save As
                   Ctrl+T   Save as Tool   F5  Reload
+                  Ctrl+Shift+P Export PNG of preview
                 """,
                 "Keybindings", JOptionPane.INFORMATION_MESSAGE));
         helpMenu.add(keys);
@@ -342,6 +350,26 @@ public final class MainFrame extends JFrame {
             item.addActionListener(e -> openProject(p.toString()));
             recentMenu.add(item);
         }
+    }
+
+    private void exportPng() {
+        JFileChooser chooser = new JFileChooser();
+        chooser.setFileFilter(new FileNameExtensionFilter("PNG image", "png"));
+        String stem = model.currentPath() != null
+                ? model.currentPath().getFileName().toString().replaceFirst("\\.pflow$", "")
+                : "frame";
+        chooser.setSelectedFile(new File(stem + ".png"));
+        int rval = chooser.showSaveDialog(this);
+        if (rval != JFileChooser.APPROVE_OPTION) return;
+        File f = chooser.getSelectedFile();
+        if (!f.getName().toLowerCase().endsWith(".png")) {
+            f = new File(f.getParentFile(), f.getName() + ".png");
+        }
+        final File target = f;
+        preview.captureNextFrameAsPng(f.toPath(), err -> {
+            if (err == null) statusBar.info("Exported " + target.getName());
+            else statusBar.error("Export failed: " + err.getMessage());
+        });
     }
 
     private void saveProject() {

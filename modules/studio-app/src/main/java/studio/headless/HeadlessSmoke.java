@@ -1,15 +1,9 @@
 package studio.headless;
 
-import java.awt.image.BufferedImage;
 import java.io.IOException;
-import java.nio.ByteBuffer;
-import java.nio.ByteOrder;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 
-import javax.imageio.ImageIO;
-
-import com.jogamp.opengl.GL;
 import com.jogamp.opengl.GL2ES2;
 import com.jogamp.opengl.GLAutoDrawable;
 import com.jogamp.opengl.GLCapabilities;
@@ -241,35 +235,6 @@ public final class HeadlessSmoke {
     }
 
     private static void saveTextureToPng(GL2ES2 gl, RenderTarget rt, String outPath) throws IOException {
-        int w = rt.getWidth();
-        int h = rt.getHeight();
-        int textureId = rt.getGLTextureId();
-        if (textureId == 0) throw new IOException("RenderTarget is not sampleable");
-
-        gl.glBindTexture(GL.GL_TEXTURE_2D, textureId);
-        ByteBuffer buf = ByteBuffer.allocateDirect(w * h * 4).order(ByteOrder.nativeOrder());
-        gl.getGL().getGL3().glGetTexImage(GL.GL_TEXTURE_2D, 0,
-                GL.GL_RGBA, GL.GL_UNSIGNED_BYTE, buf);
-        gl.glBindTexture(GL.GL_TEXTURE_2D, 0);
-
-        BufferedImage img = new BufferedImage(w, h, BufferedImage.TYPE_INT_ARGB);
-        // GL textures are bottom-row-first; flip to top-row-first for image IO.
-        int[] argb = new int[w * h];
-        for (int y = 0; y < h; y++) {
-            int srcRow = (h - 1 - y) * w;
-            for (int x = 0; x < w; x++) {
-                int i = (srcRow + x) * 4;
-                int r = buf.get(i) & 0xFF;
-                int g = buf.get(i + 1) & 0xFF;
-                int b = buf.get(i + 2) & 0xFF;
-                int a = buf.get(i + 3) & 0xFF;
-                argb[y * w + x] = (a << 24) | (r << 16) | (g << 8) | b;
-            }
-        }
-        img.setRGB(0, 0, w, h, argb, 0, w);
-
-        Path out = Paths.get(outPath);
-        if (out.getParent() != null) java.nio.file.Files.createDirectories(out.getParent());
-        ImageIO.write(img, "png", out.toFile());
+        studio.engine.TextureCapture.writePng(gl, rt, Paths.get(outPath));
     }
 }

@@ -40,6 +40,15 @@ public final class GLPreviewPanel extends JPanel {
     private final FPSAnimator animator;
 
     private final AtomicReference<PflowReader.Result> pendingProject = new AtomicReference<>();
+    private final AtomicReference<CaptureRequest> pendingCapture = new AtomicReference<>();
+
+    /** Queue a one-shot PNG export of the next post-render frame. */
+    public void captureNextFrameAsPng(java.nio.file.Path out, java.util.function.Consumer<Throwable> onDone) {
+        pendingCapture.set(new CaptureRequest(out, onDone));
+        canvas.repaint();
+    }
+
+    private record CaptureRequest(java.nio.file.Path out, java.util.function.Consumer<Throwable> onDone) {}
 
     // GL-thread state (read/written only inside GLEventListener callbacks):
     private DwPixelFlow ctx;
@@ -126,6 +135,19 @@ public final class GLPreviewPanel extends JPanel {
                 RenderTarget rt = rootOutput.lastFrame();
                 if (rt != null && rt.isSampleable()) {
                     blitToScreen(d, rt);
+                    CaptureRequest req = pendingCapture.getAndSet(null);
+                    if (req != null) {
+                        Throwable err = null;
+                        try {
+                            studio.engine.TextureCapture.writePng(d.getGL().getGL2ES2(), rt, req.out);
+                        } catch (Throwable t) {
+                            err = t;
+                        }
+                        if (req.onDone != null) {
+                            final Throwable e = err;
+                            javax.swing.SwingUtilities.invokeLater(() -> req.onDone.accept(e));
+                        }
+                    }
                 } else {
                     clearToBackdrop(d.getGL().getGL2ES2());
                 }
