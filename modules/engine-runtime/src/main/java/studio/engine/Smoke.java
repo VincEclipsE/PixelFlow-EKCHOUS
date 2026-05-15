@@ -15,6 +15,7 @@ import com.jogamp.opengl.GLProfile;
 import com.jogamp.opengl.util.Animator;
 
 import com.thomasdiewald.pixelflow.java.DwPixelFlow;
+import com.thomasdiewald.pixelflow.java.dwgl.DwGLError;
 import com.thomasdiewald.pixelflow.java.fluid.DwFluid2D;
 
 /**
@@ -61,6 +62,12 @@ public final class Smoke {
         GLWindow window = GLWindow.create(caps);
         window.setSize(W, H);
         window.setTitle("PixelFlow Studio — Smoke (fluid, no Processing)");
+
+        // Known-phantom: AMD/JOGL combination reports GL_INVALID_OPERATION
+        // after the fluid sim's addDensity step, even though step-by-step
+        // instrumentation shows zero actual errors. See commit ea6cf64 for
+        // the full diagnosis. Silence it here.
+        DwGLError.SUPPRESSED_MESSAGE_PREFIXES.add("Fluid.addDensity");
 
         ResourceLoader resources = ClasspathResourceLoader.production();
 
