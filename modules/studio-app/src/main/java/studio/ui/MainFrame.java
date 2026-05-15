@@ -45,6 +45,7 @@ import studio.save.PflowReader;
 public final class MainFrame extends JFrame {
 
     private final ToolPalette palette;
+    private final NodeEditorPanel editor;
     private final GLPreviewPanel preview;
     private final ParameterPanel parameters;
     private final StudioModel model;
@@ -52,19 +53,24 @@ public final class MainFrame extends JFrame {
     public MainFrame() {
         super("PixelFlow Studio");
         setDefaultCloseOperation(JFrame.DISPOSE_ON_CLOSE);
-        setSize(1280, 800);
+        setSize(1480, 880);
         setLocationByPlatform(true);
 
         PflowReader reader = new PflowReader(HeadlessSmoke.defaultRegistry());
         this.model = new StudioModel(reader);
 
+        this.editor = new NodeEditorPanel();
         this.preview = new GLPreviewPanel(model);
         this.parameters = new ParameterPanel(model);
         this.palette = new ToolPalette(HeadlessSmoke.defaultRegistry());
 
-        JSplitPane right = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, preview, parameters);
+        JSplitPane center = new JSplitPane(JSplitPane.VERTICAL_SPLIT, editor, preview);
+        center.setResizeWeight(0.55);
+        center.setDividerLocation(480);
+
+        JSplitPane right = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, center, parameters);
         right.setResizeWeight(1.0);
-        right.setDividerLocation(900);
+        right.setDividerLocation(1060);
 
         JSplitPane root = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, palette, right);
         root.setResizeWeight(0.0);
@@ -77,8 +83,11 @@ public final class MainFrame extends JFrame {
 
         model.addProjectLoadedListener(loaded -> {
             preview.attachRuntime(loaded);
+            editor.attachGraph(loaded);
             parameters.attachGraph(loaded);
         });
+
+        editor.addSelectionListener(n -> parameters.setActiveNode(n));
 
         addWindowListener(new WindowAdapter() {
             @Override public void windowClosing(WindowEvent e) {

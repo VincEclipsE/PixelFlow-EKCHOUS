@@ -11,7 +11,6 @@ import javax.swing.Box;
 import javax.swing.BoxLayout;
 import javax.swing.JCheckBox;
 import javax.swing.JColorChooser;
-import javax.swing.JComboBox;
 import javax.swing.JComponent;
 import javax.swing.JFormattedTextField;
 import javax.swing.JLabel;
@@ -35,11 +34,12 @@ import studio.save.PflowReader;
  */
 public final class ParameterPanel extends JPanel {
 
-    private final JComboBox<NodeChoice> nodePicker = new JComboBox<>();
+    private final JLabel header = new JLabel("(no node selected)");
     private final JPanel body = new JPanel();
 
     @SuppressWarnings("unused")
     private final StudioModel model;
+    private Node active;
 
     public ParameterPanel(StudioModel model) {
         super(new BorderLayout());
@@ -50,35 +50,36 @@ public final class ParameterPanel extends JPanel {
         JScrollPane scroll = new JScrollPane(body);
         scroll.getVerticalScrollBar().setUnitIncrement(16);
 
-        JPanel top = new JPanel(new BorderLayout(4, 4));
-        top.setBorder(BorderFactory.createEmptyBorder(4, 6, 4, 6));
-        top.add(new JLabel("Node"), BorderLayout.WEST);
-        top.add(nodePicker, BorderLayout.CENTER);
-
-        add(top, BorderLayout.NORTH);
+        header.setBorder(BorderFactory.createEmptyBorder(6, 8, 6, 8));
+        add(header, BorderLayout.NORTH);
         add(scroll, BorderLayout.CENTER);
-
-        nodePicker.addActionListener(e -> rebuildBody());
     }
 
     public void attachGraph(PflowReader.Result loaded) {
-        nodePicker.removeAllItems();
+        active = null;
         for (Node n : loaded.graph.nodes()) {
-            if (!n.parameters().isEmpty()) {
-                nodePicker.addItem(new NodeChoice(n));
-            }
+            if (!n.parameters().isEmpty()) { active = n; break; }
         }
+        rebuildBody();
+    }
+
+    /** Update the active node (driven by node-editor selection). */
+    public void setActiveNode(Node n) {
+        if (n == active) return;
+        active = n;
         rebuildBody();
     }
 
     private void rebuildBody() {
         body.removeAll();
-        NodeChoice choice = (NodeChoice) nodePicker.getSelectedItem();
-        if (choice != null) {
-            for (Parameter<?> p : choice.node.parameters()) {
+        if (active != null) {
+            header.setText(active.label() + "  —  " + active.typeId());
+            for (Parameter<?> p : active.parameters()) {
                 body.add(buildRow(p));
                 body.add(Box.createVerticalStrut(2));
             }
+        } else {
+            header.setText("(no node selected)");
         }
         body.add(Box.createVerticalGlue());
         body.revalidate();
@@ -233,12 +234,4 @@ public final class ParameterPanel extends JPanel {
         return Math.max(lo, Math.min(hi, v));
     }
 
-    /** Combo-box entry — wraps a Node to render a human label. */
-    private static final class NodeChoice {
-        final Node node;
-        NodeChoice(Node node) { this.node = node; }
-        @Override public String toString() {
-            return node.label() + "  [" + node.typeId() + "]";
-        }
-    }
 }
