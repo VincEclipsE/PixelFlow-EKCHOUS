@@ -10,11 +10,11 @@ import studio.graph.PortTypes;
  * the concrete Java type a {@link Parameter} expects. Used by the
  * {@code .pflow} loader to apply param overrides.
  */
-final class ParamCoercion {
+public final class ParamCoercion {
 
     private ParamCoercion() {}
 
-    static Object coerce(Parameter<?> param, Object raw) {
+    public static Object coerce(Parameter<?> param, Object raw) {
         if (raw == null) return null;
 
         if (param.type == PortTypes.SCALAR) {

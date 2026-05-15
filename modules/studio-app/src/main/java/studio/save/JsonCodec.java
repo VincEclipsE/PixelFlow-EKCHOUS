@@ -35,4 +35,12 @@ public final class JsonCodec {
         Files.createDirectories(file.toAbsolutePath().getParent());
         MAPPER.writeValue(file.toFile(), value);
     }
+
+    public static String writeString(Object value) throws IOException {
+        return MAPPER.writeValueAsString(value);
+    }
+
+    public static <T> T readString(String json, Class<T> type) throws IOException {
+        return MAPPER.readValue(json, type);
+    }
 }

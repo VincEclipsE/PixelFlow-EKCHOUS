@@ -206,6 +206,7 @@ public final class MainFrame extends JFrame {
                   Delete               Remove
                   M                    Mute / unmute (skip per-frame eval)
                   Ctrl+D               Duplicate
+                  Ctrl+C / Ctrl+V      Copy / paste (system clipboard)
 
                 File
                   Ctrl+O   Open       Ctrl+S   Save

@@ -123,6 +123,10 @@ public final class NodeEditorPanel extends JPanel {
                     repaint();
                 } else if (e.isControlDown() && code == KeyEvent.VK_D) {
                     duplicateSelected();
+                } else if (e.isControlDown() && code == KeyEvent.VK_C) {
+                    copySelectedToClipboard();
+                } else if (e.isControlDown() && code == KeyEvent.VK_V) {
+                    pasteFromClipboard();
                 } else if (code == KeyEvent.VK_M) {
                     boolean wasOn = selected.isEnabled();
                     selected.setEnabled(!wasOn);
@@ -211,6 +215,68 @@ public final class NodeEditorPanel extends JPanel {
         panX = getWidth() / 2.0 - cx * zoom;
         panY = getHeight() / 2.0 - cy * zoom;
         repaint();
+    }
+
+    private static final String CLIPBOARD_MARKER = "studio.node:";
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private void copySelectedToClipboard() {
+        if (selected == null) return;
+        studio.save.PflowJson.NodeJson nj = new studio.save.PflowJson.NodeJson();
+        nj.typeId = selected.typeId();
+        nj.label = selected.label();
+        if (!selected.isEnabled()) nj.enabled = Boolean.FALSE;
+        for (studio.graph.Parameter<?> p : selected.parameters()) {
+            Object v = p.get();
+            if (v instanceof float[] arr) {
+                java.util.ArrayList<Float> list = new java.util.ArrayList<>(arr.length);
+                for (float f : arr) list.add(f);
+                nj.params.put(p.name, list);
+            } else if (v != null) {
+                nj.params.put(p.name, v);
+            }
+        }
+        try {
+            String json = studio.save.JsonCodec.writeString(nj);
+            java.awt.datatransfer.StringSelection sel = new java.awt.datatransfer.StringSelection(CLIPBOARD_MARKER + json);
+            java.awt.Toolkit.getDefaultToolkit().getSystemClipboard().setContents(sel, sel);
+            if (statusBar != null) statusBar.info("Copied " + selected.label() + " to clipboard");
+        } catch (Exception ex) {
+            if (statusBar != null) statusBar.error("Copy failed: " + ex.getMessage());
+        }
+    }
+
+    @SuppressWarnings({"rawtypes", "unchecked"})
+    private void pasteFromClipboard() {
+        if (current == null) return;
+        try {
+            Object data = java.awt.Toolkit.getDefaultToolkit().getSystemClipboard()
+                    .getData(java.awt.datatransfer.DataFlavor.stringFlavor);
+            if (!(data instanceof String s) || !s.startsWith(CLIPBOARD_MARKER)) return;
+            studio.save.PflowJson.NodeJson nj = studio.save.JsonCodec.readString(
+                    s.substring(CLIPBOARD_MARKER.length()), studio.save.PflowJson.NodeJson.class);
+            Node node = registry.create(nj.typeId);
+            if (nj.label != null) node.setLabel(nj.label);
+            if (nj.enabled != null) node.setEnabled(nj.enabled);
+            if (nj.params != null) {
+                for (studio.graph.Parameter<?> p : node.parameters()) {
+                    Object raw = nj.params.get(p.name);
+                    if (raw == null) continue;
+                    Object coerced = studio.save.ParamCoercion.coerce(p, raw);
+                    if (coerced != null) ((studio.graph.Parameter) p).set(coerced);
+                }
+            }
+            current.graph.addNode(node);
+            if (current.nodesById != null) current.nodesById.put(node.id().value, node);
+            // Position near selection or at canvas center
+            Layout origin = selected != null ? layoutOf(selected) : new Layout(LAYOUT_ORIGIN_X, LAYOUT_ORIGIN_Y);
+            layouts.put(node, new Layout(origin.x + 24, origin.y + 24));
+            setSelection(node);
+            if (statusBar != null) statusBar.info("Pasted " + node.label());
+            repaint();
+        } catch (Exception ex) {
+            if (statusBar != null) statusBar.error("Paste failed: " + ex.getMessage());
+        }
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
