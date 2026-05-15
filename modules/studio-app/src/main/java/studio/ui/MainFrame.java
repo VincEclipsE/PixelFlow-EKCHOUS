@@ -66,7 +66,9 @@ public final class MainFrame extends JFrame {
         setLocationByPlatform(true);
 
         this.registry = HeadlessSmoke.defaultRegistry();
-        this.toolsLibrary = new ToolsLibrary(Paths.get("tools"), registry);
+        Path toolsRoot = resolveToolsRoot();
+        AppDataInstaller.ensureBundledSamplesInstalled(toolsRoot);
+        this.toolsLibrary = new ToolsLibrary(toolsRoot, registry);
         this.toolsLibrary.rescan();
 
         PflowReader reader = new PflowReader(registry);
@@ -358,10 +360,16 @@ public final class MainFrame extends JFrame {
         SwingUtilities.invokeLater(() -> {
             try {
                 Path p = Paths.get(path);
-                model.loadProject(p);
+                if (java.nio.file.Files.exists(p)) {
+                    model.loadProject(p);
+                    recent.add(p);
+                    rebuildRecentMenu();
+                } else {
+                    // Packaged-app fallback: try the classpath, e.g. starters/foo.pflow
+                    // is bundled as a resource under the same path.
+                    model.loadFromClasspath(path);
+                }
                 refreshTitle();
-                recent.add(p);
-                rebuildRecentMenu();
             } catch (IOException ex) {
                 statusBar.error("Open failed: " + ex.getMessage());
                 JOptionPane.showMessageDialog(this,
@@ -387,6 +395,19 @@ public final class MainFrame extends JFrame {
             item.addActionListener(e -> openProject(p.toString()));
             recentMenu.add(item);
         }
+    }
+
+    /**
+     * Choose the tools/ directory: the cwd's tools/ when it already exists
+     * (dev mode), otherwise ~/.pixelflow-studio/tools/ for packaged installs
+     * where the install directory is read-only.
+     */
+    private static Path resolveToolsRoot() {
+        Path cwdTools = Paths.get("tools");
+        if (java.nio.file.Files.isDirectory(cwdTools) && java.nio.file.Files.isWritable(cwdTools)) {
+            return cwdTools;
+        }
+        return Paths.get(System.getProperty("user.home", "."), ".pixelflow-studio", "tools");
     }
 
     /** Update the title bar to include the current path + a trailing * when dirty. */

@@ -52,6 +52,15 @@ public final class StudioModel {
         for (Consumer<PflowReader.Result> l : listeners) l.accept(loaded);
     }
 
+    /** Load a bundled starter that the packaged app ships as a classpath resource. */
+    public void loadFromClasspath(String resourcePath) throws IOException {
+        PflowReader.Result loaded = reader.loadFromClasspath(resourcePath);
+        this.currentPath = null; // no on-disk path; Save will route to Save As
+        this.current = loaded;
+        clearDirty();
+        for (Consumer<PflowReader.Result> l : listeners) l.accept(loaded);
+    }
+
     /** Reload the project from its current path. No-op if none loaded. */
     public void reload() {
         if (currentPath == null) return;

@@ -60,4 +60,5 @@ dockingframes         = ["dockingframes-core", "dockingframes-common"]
 junit                 = ["junit-jupiter"]
 
 [plugins]
-# (none yet — Gradle plugin DSL coordinates would go here when needed)
+# Badass Runtime — wraps jlink + jpackage for non-modular Java apps.
+beryx-runtime        = { id = "org.beryx.runtime", version = "1.13.1" }
