@@ -1,0 +1,63 @@
+[versions]
+# Build target
+java                  = "17"
+
+# JOGL — community maintained fork on Maven Central (org.jogamp) and JogAmp's own maven.
+# 2.5.0 is the de-facto current; if 2.5.0 is unavailable we'll fall back to 2.3.2 on Maven Central.
+jogl                  = "2.5.0"
+
+# UI shell
+flatlaf               = "3.5.4"
+flatlaf-extras        = "3.5.4"
+miglayout             = "11.4.2"
+
+# Node editor (ImGui binding for the canvas)
+imgui-java            = "1.89.0"
+
+# Serialization
+jackson               = "2.18.2"
+
+# Docking
+dockingframes         = "1.1.3p1"
+
+# Testing
+junit                 = "5.11.3"
+assertj               = "3.26.3"
+
+[libraries]
+# JOGL — gluegen + JOGL all + windows native bundles
+jogl-gluegen          = { module = "org.jogamp.gluegen:gluegen-rt-main", version.ref = "jogl" }
+jogl-all              = { module = "org.jogamp.jogl:jogl-all-main", version.ref = "jogl" }
+
+# UI
+flatlaf               = { module = "com.formdev:flatlaf", version.ref = "flatlaf" }
+flatlaf-extras        = { module = "com.formdev:flatlaf-extras", version.ref = "flatlaf-extras" }
+miglayout-swing       = { module = "com.miglayout:miglayout-swing", version.ref = "miglayout" }
+dockingframes-core    = { module = "org.key-project:docking-frames-core", version.ref = "dockingframes" }
+dockingframes-common  = { module = "org.key-project:docking-frames-common", version.ref = "dockingframes" }
+
+# ImGui (node editor canvas)
+imgui-binding         = { module = "io.github.spair:imgui-java-binding", version.ref = "imgui-java" }
+imgui-natives-win     = { module = "io.github.spair:imgui-java-natives-windows", version.ref = "imgui-java" }
+imgui-lwjgl3          = { module = "io.github.spair:imgui-java-lwjgl3", version.ref = "imgui-java" }
+
+# Serialization
+jackson-core          = { module = "com.fasterxml.jackson.core:jackson-core", version.ref = "jackson" }
+jackson-databind      = { module = "com.fasterxml.jackson.core:jackson-databind", version.ref = "jackson" }
+jackson-annotations   = { module = "com.fasterxml.jackson.core:jackson-annotations", version.ref = "jackson" }
+
+# Testing
+junit-jupiter         = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit" }
+junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher" }
+assertj-core          = { module = "org.assertj:assertj-core", version.ref = "assertj" }
+
+[bundles]
+jogl                  = ["jogl-gluegen", "jogl-all"]
+flatlaf               = ["flatlaf", "flatlaf-extras"]
+jackson               = ["jackson-core", "jackson-databind", "jackson-annotations"]
+imgui                 = ["imgui-binding", "imgui-natives-win"]
+dockingframes         = ["dockingframes-core", "dockingframes-common"]
+junit                 = ["junit-jupiter"]
+
+[plugins]
+# (none yet — Gradle plugin DSL coordinates would go here when needed)
