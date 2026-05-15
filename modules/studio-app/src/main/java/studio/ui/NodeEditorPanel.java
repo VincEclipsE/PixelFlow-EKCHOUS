@@ -991,7 +991,24 @@ public final class NodeEditorPanel extends JPanel {
             }
         }
 
-        @Override public void mouseMoved(MouseEvent e) {}
+        @Override public void mouseMoved(MouseEvent e) {
+            OutputPort<?> op = hitOutputPort(e.getPoint());
+            if (op != null) {
+                setToolTipText("output " + op.owner.label() + "." + op.name + " : " + op.type.id);
+                return;
+            }
+            InputPort<?> ip = hitInputPort(e.getPoint());
+            if (ip != null) {
+                setToolTipText("input " + ip.owner.label() + "." + ip.name + " : " + ip.type.id);
+                return;
+            }
+            Node n = hitTest(e.getPoint());
+            if (n != null) {
+                setToolTipText(n.label() + "  —  " + n.typeId());
+                return;
+            }
+            setToolTipText(null);
+        }
 
         @Override public void mouseWheelMoved(MouseWheelEvent e) {
             double prevZoom = zoom;
