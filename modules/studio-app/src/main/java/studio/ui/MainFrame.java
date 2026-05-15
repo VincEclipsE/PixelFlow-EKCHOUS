@@ -78,6 +78,7 @@ public final class MainFrame extends JFrame {
         this.statusBar = new StatusBar();
         this.editor.setStatusBar(statusBar);
         this.preview.setStatusBar(statusBar);
+        this.editor.setOnMutate(parameters::refresh);
 
         JSplitPane center = new JSplitPane(JSplitPane.VERTICAL_SPLIT, editor, preview);
         center.setResizeWeight(0.55);

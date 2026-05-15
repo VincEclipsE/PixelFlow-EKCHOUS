@@ -70,6 +70,9 @@ public final class ParameterPanel extends JPanel {
         rebuildBody();
     }
 
+    /** Re-render the widgets — call after a param change happens outside the panel (e.g. undo/redo). */
+    public void refresh() { rebuildBody(); }
+
     private void rebuildBody() {
         body.removeAll();
         if (active != null) {

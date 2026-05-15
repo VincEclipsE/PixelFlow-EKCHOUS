@@ -83,6 +83,7 @@ public final class NodeEditorPanel extends JPanel {
 
     private final NodeFactoryRegistry registry;
     private final studio.graph.UndoStack undo = new studio.graph.UndoStack();
+    private final ParamEditTracker paramTracker = new ParamEditTracker(undo);
     private StatusBar statusBar;
 
     // Move tracking: position at mousePressed → diff on mouseReleased
@@ -93,11 +94,16 @@ public final class NodeEditorPanel extends JPanel {
     public boolean canUndo() { return undo.canUndo(); }
     public boolean canRedo() { return undo.canRedo(); }
 
+    private Runnable onMutate;
+    public void setOnMutate(Runnable r) { this.onMutate = r; }
+    private void fireOnMutate() { if (onMutate != null) onMutate.run(); }
+
     public void undo() {
         var c = undo.undo();
         if (c != null) {
             if (statusBar != null) statusBar.info("Undid: " + c.description());
             repaint();
+            fireOnMutate();
         }
     }
 
@@ -106,6 +112,7 @@ public final class NodeEditorPanel extends JPanel {
         if (c != null) {
             if (statusBar != null) statusBar.info("Redid: " + c.description());
             repaint();
+            fireOnMutate();
         }
     }
 
@@ -198,6 +205,8 @@ public final class NodeEditorPanel extends JPanel {
         this.current = loaded;
         this.selected = null;
         this.undo.clear();
+        this.paramTracker.clear();
+        for (Node n : loaded.graph.nodes()) this.paramTracker.track(n);
         autoLayout(loaded);
         // Apply any saved per-node positions from the .pflow file
         if (loaded.source != null && loaded.source.nodes != null) {
@@ -295,11 +304,13 @@ public final class NodeEditorPanel extends JPanel {
 
         final java.util.Map<String, studio.graph.Node> nodesByIdRef =
                 current.nodesById != null ? current.nodesById : null;
+        paramTracker.untrack(node);
         undo.push(new studio.graph.UndoStack.Command() {
             @Override public void apply() {
                 current.graph.removeNode(node.id());
                 layouts.remove(node);
                 if (nodesByIdRef != null) nodesByIdRef.remove(node.id().value);
+                paramTracker.untrack(node);
                 if (selected == node) setSelection(null);
                 repaint();
             }
@@ -307,6 +318,7 @@ public final class NodeEditorPanel extends JPanel {
                 current.graph.addNode(node);
                 if (nodesByIdRef != null) nodesByIdRef.put(node.id().value, node);
                 if (pos != null) layouts.put(node, new Layout(posX, posY));
+                paramTracker.track(node);
                 for (Edge e : severed) {
                     try { current.graph.connect(e.from, e.to); }
                     catch (Exception ignored) { /* skip if endpoints disappeared */ }
@@ -322,6 +334,7 @@ public final class NodeEditorPanel extends JPanel {
         current.graph.addNode(node);
         if (current.nodesById != null) current.nodesById.put(node.id().value, node);
         layouts.put(node, new Layout(x, y));
+        paramTracker.track(node);
         final java.util.Map<String, studio.graph.Node> nodesByIdRef =
                 current.nodesById != null ? current.nodesById : null;
         undo.push(new studio.graph.UndoStack.Command() {
@@ -329,12 +342,14 @@ public final class NodeEditorPanel extends JPanel {
                 current.graph.addNode(node);
                 if (nodesByIdRef != null) nodesByIdRef.put(node.id().value, node);
                 layouts.put(node, new Layout(x, y));
+                paramTracker.track(node);
                 repaint();
             }
             @Override public void revert() {
                 current.graph.removeNode(node.id());
                 if (nodesByIdRef != null) nodesByIdRef.remove(node.id().value);
                 layouts.remove(node);
+                paramTracker.untrack(node);
                 if (selected == node) setSelection(null);
                 repaint();
             }
