@@ -171,6 +171,21 @@ public final class MainFrame extends JFrame {
 
         bar.add(fileMenu);
 
+        JMenu viewMenu = new JMenu("View");
+        JMenuItem resetLayout = new JMenuItem("Reset Layout");
+        resetLayout.setAccelerator(KeyStroke.getKeyStroke("ctrl L"));
+        resetLayout.addActionListener(e -> {
+            editor.resetLayout();
+            statusBar.info("Layout reset");
+        });
+        viewMenu.add(resetLayout);
+
+        JMenuItem frameAll = new JMenuItem("Frame All");
+        frameAll.setAccelerator(KeyStroke.getKeyStroke("F"));
+        frameAll.addActionListener(e -> editor.frameAll());
+        viewMenu.add(frameAll);
+        bar.add(viewMenu);
+
         JMenu helpMenu = new JMenu("Help");
         JMenuItem keys = new JMenuItem("Keybindings");
         keys.setAccelerator(KeyStroke.getKeyStroke("F1"));
@@ -182,6 +197,7 @@ public final class MainFrame extends JFrame {
                   Middle-drag          Pan canvas
                   Mouse-wheel          Zoom
                   Home                 Reset pan/zoom
+                  F                    Frame all (zoom to fit)
                   F9                   Toggle minimap
                   Right-click edge     Disconnect
                   Drag output→input    Create edge

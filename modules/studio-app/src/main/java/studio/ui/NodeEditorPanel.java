@@ -111,6 +111,10 @@ public final class NodeEditorPanel extends JPanel {
                     repaint();
                     return;
                 }
+                if (code == KeyEvent.VK_F) {
+                    frameAll();
+                    return;
+                }
                 if (selected == null || current == null) return;
                 if (code == KeyEvent.VK_DELETE) {
                     current.graph.removeNode(selected.id());
@@ -173,6 +177,39 @@ public final class NodeEditorPanel extends JPanel {
                 if (node != null) layouts.put(node, new Layout(nj.layout.x, nj.layout.y));
             }
         }
+        repaint();
+    }
+
+    /** Discard saved positions and re-run autoLayout on the current graph. */
+    public void resetLayout() {
+        if (current == null) return;
+        autoLayout(current);
+        repaint();
+    }
+
+    /** Centre the viewport on the graph's bounding box, zoomed to fit. */
+    public void frameAll() {
+        if (current == null || current.graph.nodes().isEmpty()) return;
+        int minX = Integer.MAX_VALUE, minY = Integer.MAX_VALUE;
+        int maxX = Integer.MIN_VALUE, maxY = Integer.MIN_VALUE;
+        for (Node n : current.graph.nodes()) {
+            Layout L = layoutOf(n);
+            int h = nodeHeight(n);
+            minX = Math.min(minX, L.x);
+            minY = Math.min(minY, L.y);
+            maxX = Math.max(maxX, L.x + NODE_WIDTH);
+            maxY = Math.max(maxY, L.y + h);
+        }
+        int padding = 40;
+        double bbW = (maxX - minX) + padding * 2;
+        double bbH = (maxY - minY) + padding * 2;
+        double sx = getWidth() / bbW;
+        double sy = getHeight() / bbH;
+        zoom = Math.max(0.2, Math.min(4.0, Math.min(sx, sy)));
+        double cx = (minX + maxX) / 2.0;
+        double cy = (minY + maxY) / 2.0;
+        panX = getWidth() / 2.0 - cx * zoom;
+        panY = getHeight() / 2.0 - cy * zoom;
         repaint();
     }
 
