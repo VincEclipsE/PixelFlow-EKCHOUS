@@ -75,10 +75,15 @@ public class DwHarrisCorner {
   }
   
 
+  public void update(studio.engine.RenderTarget pg_curr) {
+    updateImpl(pg_curr, pg_curr.getWidth(), pg_curr.getHeight());
+  }
+
   public void update(PGraphics2D pg_curr) {
-    
-    int w = pg_curr.width;
-    int h = pg_curr.height;
+    throw new UnsupportedOperationException("PGraphics2D path is stubbed; use the RenderTarget overload");
+  }
+
+  private void updateImpl(studio.engine.RenderTarget pg_curr, int w, int h) {
 
     // 0) resize(w/h) or reformat(rgba/grayscale)
     frameCurr.resize(context, w, h);
@@ -145,10 +150,13 @@ public class DwHarrisCorner {
   
   
   public void render(PGraphics2D dst){
+    throw new UnsupportedOperationException("PGraphics2D path is stubbed; use the RenderTarget overload");
+  }
 
+  public void render(studio.engine.RenderTarget dst){
     int w = dst.getWidth();
     int h = dst.getHeight();
-    
+
     context.begin();
     context.beginDraw(dst);
     context.gl.glEnable(GL2.GL_BLEND);
