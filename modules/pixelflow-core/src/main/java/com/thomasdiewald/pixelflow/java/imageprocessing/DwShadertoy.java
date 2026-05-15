@@ -66,7 +66,9 @@ public class DwShadertoy{
     this.context = context;
     this.context.registerDispose(this);
     createShader(shader_filename);
-    resize(context.papplet.width, context.papplet.height);
+    // Studio fork: initial size is unknown until first explicit resize() call.
+    // Upstream pulled context.papplet.width/height; we have no PApplet, so the
+    // caller must invoke resize(w, h) before the first dispatch.
   }
   
 
@@ -311,9 +313,8 @@ public class DwShadertoy{
    * @param tex
    */
   public void set_iChannel(int channel, RenderTarget pg){
-    Texture tex2D = pg.getTexture(); 
-    if(tex2D.available()){
-      set_iChannel(channel, tex2D.glName, tex2D.glWidth, tex2D.glHeight, 1, "sampler2D");
+    if (pg.isSampleable()) {
+      set_iChannel(channel, pg.getGLTextureId(), pg.getWidth(), pg.getHeight(), 1, "sampler2D");
     }
   }
   
@@ -357,8 +358,10 @@ public class DwShadertoy{
   protected void render(int w, int h){
     
     set_iResolution(w, h, 1f);
-    set_iFrameRate(context.papplet.frameRate);
-    set_iTimeDelta(1f/context.papplet.frameRate);
+    // Studio fork: PApplet.frameRate is gone. Default to 60 FPS; callers may
+    // override via set_iFrameRate(float) before render().
+    set_iFrameRate(60f);
+    set_iTimeDelta(1f / 60f);
     set_iTime();
     set_iDate();
     
@@ -417,11 +420,10 @@ public class DwShadertoy{
    * @param tex_dst
    */
   public void apply(RenderTarget pg_dst){
-    resize(pg_dst.width, pg_dst.height);
-    pg_dst.getTexture();
+    resize(pg_dst.getWidth(), pg_dst.getHeight());
     context.begin();
     context.beginDraw(pg_dst);
-    render(pg_dst.width, pg_dst.height);
+    render(pg_dst.getWidth(), pg_dst.getHeight());
     context.endDraw();
     context.end();
   }

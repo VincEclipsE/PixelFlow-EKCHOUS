@@ -95,7 +95,7 @@ public class DistanceTransform {
   
   public void create(RenderTarget pg_mask){
     if(!pg_mask.isSampleable()) return;
-    create(mask.getGLTextureId(), mask.getWidth(), mask.getHeight());
+    create(pg_mask.getGLTextureId(), pg_mask.getWidth(), pg_mask.getHeight());
   }
   
   public void create(DwGLTexture tex_mask){    
@@ -159,8 +159,7 @@ public class DistanceTransform {
   
   
   public void computeDistanceThreshold(RenderTarget dst, float distance_threshold, float[] colA, float[] colB){
-    Texture tex_dst  = dst.getTexture();  if(!tex_dst .available())  return;
- 
+    if(!dst.isSampleable()) return;
     int w = dst.getWidth();
     int h = dst.getHeight();
     
@@ -186,15 +185,15 @@ public class DistanceTransform {
    * @param dst
    */
   public void apply(RenderTarget src, RenderTarget dst){
-    Texture tex_src = src.getTexture();  if(!tex_src .available()) return;
-    Texture tex_dst = dst.getTexture();  if(!tex_dst .available()) return;
-    
+    if(!src.isSampleable()) return;
+    if(!dst.isSampleable()) return;
+
     if(src == dst){
       System.out.println("DistanceTransform.apply error: read-write race");
     }
     int w_dst = dst.getWidth();
     int h_dst = dst.getHeight();
-    
+
     int w_src = src.getWidth();
     int h_src = src.getHeight();
     

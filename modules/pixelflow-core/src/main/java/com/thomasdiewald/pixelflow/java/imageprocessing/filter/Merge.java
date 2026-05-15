@@ -243,8 +243,8 @@ public class Merge {
       return this;
     }
     public TexMad set(RenderTarget pg, float mul, float add){
-      Texture tex = pg.getTexture(); if(!tex.available()) return this;
-      this.tex = tex.glName;
+      if (!pg.isSampleable()) return this;
+      this.tex = pg.getGLTextureId();
       this.mul = mul;
       this.add = add;
       return this;

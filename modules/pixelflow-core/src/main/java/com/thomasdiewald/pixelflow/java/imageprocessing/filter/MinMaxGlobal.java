@@ -85,7 +85,7 @@ public class MinMaxGlobal {
   }
   
   public void resize(RenderTarget pg){
-    resize(GL2.GL_RGBA8, pg.width, pg.height, GL2.GL_RGBA, GL2.GL_UNSIGNED_BYTE, 4, 1);
+    resize(GL2.GL_RGBA8, pg.getWidth(), pg.getHeight(), GL2.GL_RGBA, GL2.GL_UNSIGNED_BYTE, 4, 1);
   }
   
   public void resize(int iformat, int w, int h, int format, int type, int num_channel, int byte_per_channel){
@@ -236,7 +236,7 @@ public class MinMaxGlobal {
     if(!pg_src.isSampleable()) return;
     context.begin();
     context.beginDraw(pg_dst);
-    map(pg_dst.width, pg_dst.height, src.getGLTextureId(), per_channel);
+    map(pg_dst.getWidth(), pg_dst.getHeight(), src.getGLTextureId(), per_channel);
     context.endDraw();
     context.end("MinMaxGlobal.map");
   }

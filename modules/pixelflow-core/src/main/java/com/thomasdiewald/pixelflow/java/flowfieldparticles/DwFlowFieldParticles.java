@@ -540,7 +540,7 @@ public class DwFlowFieldParticles{
     if(param.size_display <= 0) return;
     context.begin();
     context.beginDraw(canvas);
-    displayParticles(canvas.width, canvas.height);
+    displayParticles(canvas.getWidth(), canvas.getHeight());
     context.endDraw();
     context.end("DwFlowFieldParticles.displayParticles RenderTarget");
   }
@@ -558,7 +558,7 @@ public class DwFlowFieldParticles{
     if(param.display_line_width <= 0) return;
     context.begin();
     context.beginDraw(canvas);
-    displayTrail(canvas.width, canvas.height);
+    displayTrail(canvas.getWidth(), canvas.getHeight());
     context.endDraw();
     context.end("DwFlowFieldParticles.displayTrail RenderTarget");
   }

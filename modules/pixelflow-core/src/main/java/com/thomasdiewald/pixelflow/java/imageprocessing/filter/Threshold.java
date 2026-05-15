@@ -48,9 +48,7 @@ public class Threshold {
   }
   
   public void apply(RenderTarget src, DwGLTexture dst) {
-    Texture tex_src = src.getTexture();
-    if(!tex_src.available()) 
-      return;
+    if (!src.isSampleable()) return;
        
     context.begin();
     context.beginDraw(dst);

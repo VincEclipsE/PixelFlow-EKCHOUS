@@ -213,6 +213,16 @@ public final class PMatrix3D implements PMatrix {
         return true;
     }
 
+    public float[] mult(float[] vec, float[] target) {
+        if (target == null || target.length < 4) target = new float[4];
+        float vx = vec[0], vy = vec[1], vz = vec[2], vw = vec.length > 3 ? vec[3] : 1f;
+        target[0] = m00 * vx + m01 * vy + m02 * vz + m03 * vw;
+        target[1] = m10 * vx + m11 * vy + m12 * vz + m13 * vw;
+        target[2] = m20 * vx + m21 * vy + m22 * vz + m23 * vw;
+        target[3] = m30 * vx + m31 * vy + m32 * vz + m33 * vw;
+        return target;
+    }
+
     public PVector mult(PVector source, PVector target) {
         if (target == null) target = new PVector();
         float vx = source.x, vy = source.y, vz = source.z;

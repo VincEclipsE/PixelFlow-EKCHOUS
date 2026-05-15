@@ -48,8 +48,39 @@ public class PShape implements PConstants {
     public void fill(float r, float g, float b) {}
     public void noFill() {}
 
-    public void addChild(PShape child) {}
+    // PShape setters (different from stroke()/fill() — these set/enable on a built shape)
+    public void setStroke(boolean enable) {}
+    public void setStroke(int color) {}
+    public void setStroke(float r, float g, float b) {}
+    public void setStrokeWeight(float w) {}
+    public void setFill(boolean enable) {}
+    public void setFill(int color) {}
+    public void setFill(float r, float g, float b) {}
+    public void setVisible(boolean visible) {}
+    public void setTint(boolean enable) {}
+    public void setTint(int color) {}
+    public void setName(String n) {}
+    public void resetMatrix() {}
+    public void translate(float x, float y) {}
+    public void translate(float x, float y, float z) {}
+    public void rotate(float a) {}
+    public void rotate(float a, float vx, float vy, float vz) {}
+    public void rotateX(float a) {}
+    public void rotateY(float a) {}
+    public void rotateZ(float a) {}
+    public void scale(float s) {}
+    public void scale(float sx, float sy) {}
+    public void scale(float sx, float sy, float sz) {}
 
+    public void textureMode(int mode) {}
+    public void textureWrap(int wrap) {}
+    public void texture(PImage img) {}
+
+    public void addChild(PShape child) {}
+    public int getChildCount() { return 0; }
+    public PShape getChild(int i) { return null; }
+    public void removeChild(int i) {}
+    public String getName() { return null; }
     public int getVertexCount() { return vertexCount; }
 
     public void disableStyle() {}

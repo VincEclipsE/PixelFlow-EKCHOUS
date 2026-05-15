@@ -59,4 +59,43 @@ public class PGraphics extends PImage implements PConstants {
     public void noSmooth() { smooth = 0; }
 
     public void blendMode(int mode) {}
+
+    // Retained-mode geometry — all no-ops in the studio's shim (no Processing renderer behind it)
+    public void beginShape() {}
+    public void beginShape(int kind) {}
+    public void endShape() {}
+    public void endShape(int mode) {}
+    public void vertex(float x, float y) {}
+    public void vertex(float x, float y, float z) {}
+    public void vertex(float x, float y, float u, float v) {}
+    public void vertex(float x, float y, float z, float u, float v) {}
+    public void normal(float nx, float ny, float nz) {}
+    public void texture(PImage img) {}
+    public void textureMode(int mode) {}
+    public void textureWrap(int wrap) {}
+    public void textureSampling(int mode) {}
+    public void shape(PShape s) {}
+    public void shape(PShape s, float x, float y) {}
+    public void resetShader() {}
+
+    // Lighting / camera / matrix stack — no-ops; never reach a real renderer
+    public void ambientLight(float r, float g, float b) {}
+    public void directionalLight(float r, float g, float b, float nx, float ny, float nz) {}
+    public void pointLight(float r, float g, float b, float x, float y, float z) {}
+    public void spotLight(float r, float g, float b, float x, float y, float z, float nx, float ny, float nz, float angle, float concentration) {}
+    public void lights() {}
+    public void noLights() {}
+    public void camera(float eyeX, float eyeY, float eyeZ, float centerX, float centerY, float centerZ, float upX, float upY, float upZ) {}
+    public void ortho(float left, float right, float bottom, float top, float near, float far) {}
+    public void perspective(float fovy, float aspect, float near, float far) {}
+
+    public void pushStyle() {}
+    public void popStyle() {}
+    public void resetMatrix() {}
+
+    public boolean is3D() { return false; }
+
+    // Pixel access — minimal
+    public void loadPixels() {}
+    public void updatePixels() {}
 }

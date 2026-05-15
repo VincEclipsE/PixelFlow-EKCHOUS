@@ -42,8 +42,8 @@ public class DoG {
   
   public void apply(RenderTarget src, RenderTarget dst, RenderTarget tmp) {
     if(!src.isSampleable()) return;
-    Texture tex_dst = dst.getTexture(); if(!tex_dst .available())  return;
-    Texture tex_tmp = dst.getTexture(); if(!tex_tmp .available())  return;
+    if (!dst.isSampleable()) return;
+    if (!dst.isSampleable()) return;
     
     if(src == dst) System.out.println("WARNING: DoG.apply src == dst");
     if(src == tmp) System.out.println("WARNING: DoG.apply src == tmp");

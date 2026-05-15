@@ -33,6 +33,13 @@ public class PApplet implements PConstants {
     public PGraphics createGraphics(int w, int h, String renderer) { return (PGraphics) throwUnsupported(); }
     public PImage createImage(int w, int h, int format) { return (PImage) throwUnsupported(); }
 
+    public PShape createShape() { return new PShape(); }
+    public PShape createShape(int kind) { return new PShape(kind); }
+    public PShape createShape(int kind, float... params) { return new PShape(kind); }
+
+    public PImage loadImage(String filename) { return (PImage) throwUnsupported(); }
+    public PImage loadImage(String filename, String extension) { return (PImage) throwUnsupported(); }
+
     public float noise(float x) { return 0; }
     public float noise(float x, float y) { return 0; }
     public float noise(float x, float y, float z) { return 0; }

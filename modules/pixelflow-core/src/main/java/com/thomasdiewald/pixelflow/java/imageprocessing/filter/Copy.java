@@ -31,8 +31,8 @@ public class Copy {
   }
 
   public void apply(PGraphicsOpenGL src, PGraphicsOpenGL dst) {
-    Texture tex_src = src.getTexture(); if(!tex_src.available())  return;
-    Texture tex_dst = dst.getTexture(); if(!tex_dst.available())  return;
+    if (!src.isSampleable()) return;
+    if (!dst.isSampleable()) return;
        
     context.begin();
     context.beginDraw(dst);
@@ -42,7 +42,7 @@ public class Copy {
   }
   
   public void apply(PGraphicsOpenGL src, DwGLTexture dst) {
-    Texture tex_src = src.getTexture(); if(!tex_src.available())  return;
+    if (!src.isSampleable()) return;
        
     context.begin();
     context.beginDraw(dst);
@@ -69,7 +69,7 @@ public class Copy {
   
   
   public void apply(DwGLTexture src, PGraphicsOpenGL dst) {
-    Texture tex_dst = dst.getTexture(); if(!tex_dst.available())  return;
+    if (!dst.isSampleable()) return;
     
     context.begin();
     context.beginDraw(dst);

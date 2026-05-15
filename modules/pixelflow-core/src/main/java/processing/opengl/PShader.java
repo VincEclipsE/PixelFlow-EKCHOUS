@@ -18,4 +18,11 @@ public class PShader {
     public PShader(PApplet papplet, String[] vert, String[] frag) {}
 
     protected void setup() {}
+
+    public void set(String name, float v) {}
+    public void set(String name, float a, float b) {}
+    public void set(String name, float a, float b, float c) {}
+    public void set(String name, float a, float b, float c, float d) {}
+    public void set(String name, int v) {}
+    public void set(String name, boolean v) {}
 }

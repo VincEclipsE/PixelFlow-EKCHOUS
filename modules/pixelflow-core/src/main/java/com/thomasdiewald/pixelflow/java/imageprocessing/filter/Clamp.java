@@ -56,9 +56,7 @@ public class Clamp {
   }
   
   public void apply(RenderTarget src, DwGLTexture dst, float[] lo, float[] hi) {
-    Texture tex_src = src.getTexture();
-    if(!tex_src.available()) 
-      return;
+    if (!src.isSampleable()) return;
        
     context.begin();
     context.beginDraw(dst);

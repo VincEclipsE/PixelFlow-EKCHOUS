@@ -38,9 +38,7 @@ public class Mad {
   }
   
   public void apply(RenderTarget src, DwGLTexture dst, float[] mad) {
-    Texture tex_src = src.getTexture();
-    if(!tex_src.available()) 
-      return;
+    if (!src.isSampleable()) return;
        
     context.begin();
     context.beginDraw(dst);
@@ -50,9 +48,7 @@ public class Mad {
   }
   
   public void apply(DwGLTexture src, RenderTarget dst, float[] mad) {
-    Texture tex_src = dst.getTexture();
-    if(!tex_src.available()) 
-      return;
+    if (!dst.isSampleable()) return;
        
     context.begin();
     context.beginDraw(dst);
