@@ -102,6 +102,7 @@ public final class NodeEditorPanel extends JPanel {
 
     public boolean canUndo() { return undo.canUndo(); }
     public boolean canRedo() { return undo.canRedo(); }
+    public studio.graph.UndoStack undoStack() { return undo; }
 
     private Runnable onMutate;
     public void setOnMutate(Runnable r) { this.onMutate = r; }

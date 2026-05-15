@@ -21,7 +21,24 @@ public final class StudioModel {
     private final PflowReader reader;
     private Path currentPath;
     private PflowReader.Result current;
+    private boolean dirty;
     private final List<Consumer<PflowReader.Result>> listeners = new ArrayList<>();
+    private Runnable dirtyListener;
+
+    public boolean isDirty() { return dirty; }
+    public void markDirty() {
+        if (!dirty) {
+            dirty = true;
+            if (dirtyListener != null) dirtyListener.run();
+        }
+    }
+    public void clearDirty() {
+        if (dirty) {
+            dirty = false;
+            if (dirtyListener != null) dirtyListener.run();
+        }
+    }
+    public void setDirtyListener(Runnable r) { this.dirtyListener = r; }
 
     public StudioModel(PflowReader reader) {
         this.reader = reader;
@@ -31,6 +48,7 @@ public final class StudioModel {
         PflowReader.Result loaded = reader.load(path);
         this.currentPath = path;
         this.current = loaded;
+        clearDirty();
         for (Consumer<PflowReader.Result> l : listeners) l.accept(loaded);
     }
 
@@ -60,6 +78,7 @@ public final class StudioModel {
         if (currentPath == null) throw new IOException("no project loaded; use Save As");
         if (current == null) throw new IOException("no graph loaded");
         PflowWriter.write(currentPath, current.graph, current.source, layouts);
+        clearDirty();
     }
 
     /** Write the current graph to a new path. The model adopts that path. */
@@ -71,5 +90,6 @@ public final class StudioModel {
         if (current == null) throw new IOException("no graph loaded");
         PflowWriter.write(path, current.graph, current.source, layouts);
         currentPath = path;
+        clearDirty();
     }
 }

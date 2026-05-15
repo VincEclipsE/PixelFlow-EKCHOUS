@@ -79,7 +79,9 @@ public final class MainFrame extends JFrame {
         this.editor.setStatusBar(statusBar);
         this.preview.setStatusBar(statusBar);
         this.editor.setOnMutate(parameters::refresh);
-        this.parameters.setOnLabelChange(editor::repaint);
+        this.parameters.setOnLabelChange(() -> { editor.repaint(); model.markDirty(); });
+        this.editor.undoStack().setOnMutate(model::markDirty);
+        this.model.setDirtyListener(this::refreshTitle);
 
         JSplitPane center = new JSplitPane(JSplitPane.VERTICAL_SPLIT, editor, preview);
         center.setResizeWeight(0.55);
@@ -119,10 +121,13 @@ public final class MainFrame extends JFrame {
 
         addWindowListener(new WindowAdapter() {
             @Override public void windowClosing(WindowEvent e) {
+                if (!confirmCloseIfDirty()) return;
                 preview.shutdown();
                 toolsLibrary.stopWatcher();
+                dispose();
             }
         });
+        setDefaultCloseOperation(JFrame.DO_NOTHING_ON_CLOSE);
 
         setMinimumSize(new Dimension(900, 600));
     }
@@ -344,7 +349,7 @@ public final class MainFrame extends JFrame {
             try {
                 Path p = Paths.get(path);
                 model.loadProject(p);
-                setTitle("PixelFlow Studio — " + path);
+                refreshTitle();
                 recent.add(p);
                 rebuildRecentMenu();
             } catch (IOException ex) {
@@ -374,6 +379,26 @@ public final class MainFrame extends JFrame {
         }
     }
 
+    /** Update the title bar to include the current path + a trailing * when dirty. */
+    private void refreshTitle() {
+        String base = "PixelFlow Studio";
+        Path p = model.currentPath();
+        String stem = p != null ? p.getFileName().toString() : "(unsaved)";
+        setTitle(base + " — " + stem + (model.isDirty() ? " *" : ""));
+    }
+
+    /** Prompt to save when dirty; returns true if the close should proceed. */
+    private boolean confirmCloseIfDirty() {
+        if (!model.isDirty()) return true;
+        int rval = JOptionPane.showConfirmDialog(
+                this,
+                "Discard unsaved changes?",
+                "Close",
+                JOptionPane.OK_CANCEL_OPTION,
+                JOptionPane.WARNING_MESSAGE);
+        return rval == JOptionPane.OK_OPTION;
+    }
+
     private void exportPng() {
         JFileChooser chooser = new JFileChooser();
         chooser.setFileFilter(new FileNameExtensionFilter("PNG image", "png"));
@@ -398,7 +423,7 @@ public final class MainFrame extends JFrame {
         if (model.currentPath() == null) { saveProjectAs(); return; }
         try {
             model.save(editor.exportLayout());
-            setTitle("PixelFlow Studio — " + model.currentPath());
+            refreshTitle();
             statusBar.info("Saved " + model.currentPath().getFileName());
         } catch (IOException ex) {
             statusBar.error("Save failed: " + ex.getMessage());
@@ -425,7 +450,7 @@ public final class MainFrame extends JFrame {
         }
         try {
             model.saveAs(f.toPath(), editor.exportLayout());
-            setTitle("PixelFlow Studio — " + f.toPath());
+            refreshTitle();
             statusBar.info("Saved " + f.toPath().getFileName());
             recent.add(f.toPath());
             rebuildRecentMenu();

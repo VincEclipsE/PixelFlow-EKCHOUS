@@ -26,12 +26,18 @@ public final class UndoStack {
     private static final int MAX_DEPTH = 100;
     private final Deque<Command> past = new ArrayDeque<>();
     private final Deque<Command> future = new ArrayDeque<>();
+    private Runnable onMutate;
+
+    /** Fires on every push, undo, or redo — i.e. any graph mutation. */
+    public void setOnMutate(Runnable r) { this.onMutate = r; }
+    private void fireMutate() { if (onMutate != null) onMutate.run(); }
 
     /** Push an already-applied command; clears the redo stack. */
     public void push(Command c) {
         past.push(c);
         future.clear();
         while (past.size() > MAX_DEPTH) past.pollLast();
+        fireMutate();
     }
 
     public boolean canUndo() { return !past.isEmpty(); }
@@ -42,6 +48,7 @@ public final class UndoStack {
         Command c = past.pop();
         c.revert();
         future.push(c);
+        fireMutate();
         return c;
     }
 
@@ -50,6 +57,7 @@ public final class UndoStack {
         Command c = future.pop();
         c.apply();
         past.push(c);
+        fireMutate();
         return c;
     }
 
