@@ -492,7 +492,7 @@ public class DwFluid2D{
   // RENDER
   //////////////////////////////////////////////////////////////////////////////
   
-  public void renderFluidTextures(PGraphics2D dst, int display_mode){
+  public void renderFluidTextures(studio.engine.RenderTarget dst, int display_mode){
     
     int w = dst.getWidth();
     int h = dst.getHeight();
@@ -517,7 +517,7 @@ public class DwFluid2D{
   
   
 
-  public void renderFluidVectors(PGraphics2D dst, int spacing){
+  public void renderFluidVectors(studio.engine.RenderTarget dst, int spacing){
 
     int w = dst.getWidth();
     int h = dst.getHeight();
