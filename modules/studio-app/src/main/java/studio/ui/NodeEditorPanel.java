@@ -115,25 +115,21 @@ public final class NodeEditorPanel extends JPanel {
                     frameAll();
                     return;
                 }
+                if (e.isControlDown() && code == KeyEvent.VK_V) {
+                    pasteFromClipboard();
+                    return;
+                }
                 if (selected == null || current == null) return;
                 if (code == KeyEvent.VK_DELETE) {
-                    current.graph.removeNode(selected.id());
-                    layouts.remove(selected);
-                    setSelection(null);
-                    repaint();
+                    deleteSelected();
                 } else if (e.isControlDown() && code == KeyEvent.VK_D) {
                     duplicateSelected();
                 } else if (e.isControlDown() && code == KeyEvent.VK_C) {
                     copySelectedToClipboard();
-                } else if (e.isControlDown() && code == KeyEvent.VK_V) {
-                    pasteFromClipboard();
+                } else if (e.isControlDown() && code == KeyEvent.VK_X) {
+                    cutSelected();
                 } else if (code == KeyEvent.VK_M) {
-                    boolean wasOn = selected.isEnabled();
-                    selected.setEnabled(!wasOn);
-                    if (statusBar != null) {
-                        statusBar.info((wasOn ? "Muted " : "Enabled ") + selected.label());
-                    }
-                    repaint();
+                    toggleMuteSelected();
                 }
             }
         });
@@ -219,8 +215,35 @@ public final class NodeEditorPanel extends JPanel {
 
     private static final String CLIPBOARD_MARKER = "studio.node:";
 
+    public void deleteSelected() {
+        if (selected == null || current == null) return;
+        current.graph.removeNode(selected.id());
+        layouts.remove(selected);
+        setSelection(null);
+        repaint();
+    }
+
+    public void toggleMuteSelected() {
+        if (selected == null) return;
+        boolean wasOn = selected.isEnabled();
+        selected.setEnabled(!wasOn);
+        if (statusBar != null) {
+            statusBar.info((wasOn ? "Muted " : "Enabled ") + selected.label());
+        }
+        repaint();
+    }
+
+    public void cutSelected() {
+        if (selected == null || current == null) return;
+        copySelectedToClipboard();
+        current.graph.removeNode(selected.id());
+        layouts.remove(selected);
+        setSelection(null);
+        repaint();
+    }
+
     @SuppressWarnings({"rawtypes", "unchecked"})
-    private void copySelectedToClipboard() {
+    public void copySelectedToClipboard() {
         if (selected == null) return;
         studio.save.PflowJson.NodeJson nj = new studio.save.PflowJson.NodeJson();
         nj.typeId = selected.typeId();
@@ -247,7 +270,7 @@ public final class NodeEditorPanel extends JPanel {
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
-    private void pasteFromClipboard() {
+    public void pasteFromClipboard() {
         if (current == null) return;
         try {
             Object data = java.awt.Toolkit.getDefaultToolkit().getSystemClipboard()
@@ -280,7 +303,7 @@ public final class NodeEditorPanel extends JPanel {
     }
 
     @SuppressWarnings({"rawtypes", "unchecked"})
-    private void duplicateSelected() {
+    public void duplicateSelected() {
         if (selected == null || current == null) return;
         Node src = selected;
         Node copy = registry.create(src.typeId());

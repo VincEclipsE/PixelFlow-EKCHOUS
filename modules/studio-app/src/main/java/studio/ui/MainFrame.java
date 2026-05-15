@@ -11,6 +11,7 @@ import java.nio.file.Paths;
 
 import javax.swing.JFileChooser;
 import javax.swing.JFrame;
+import javax.swing.JLabel;
 import javax.swing.JMenu;
 import javax.swing.JMenuBar;
 import javax.swing.JMenuItem;
@@ -170,6 +171,38 @@ public final class MainFrame extends JFrame {
         fileMenu.add(exit);
 
         bar.add(fileMenu);
+
+        JMenu editMenu = new JMenu("Edit");
+        JMenuItem duplicate = new JMenuItem("Duplicate Selected");
+        duplicate.addActionListener(e -> editor.duplicateSelected());
+        editMenu.add(duplicate);
+
+        JMenuItem mute = new JMenuItem("Mute / Unmute Selected");
+        mute.addActionListener(e -> editor.toggleMuteSelected());
+        editMenu.add(mute);
+
+        JMenuItem copy = new JMenuItem("Copy Selected");
+        copy.addActionListener(e -> editor.copySelectedToClipboard());
+        editMenu.add(copy);
+
+        JMenuItem paste = new JMenuItem("Paste");
+        paste.addActionListener(e -> editor.pasteFromClipboard());
+        editMenu.add(paste);
+
+        JMenuItem cut = new JMenuItem("Cut Selected");
+        cut.addActionListener(e -> editor.cutSelected());
+        editMenu.add(cut);
+
+        JMenuItem delete = new JMenuItem("Delete Selected");
+        delete.addActionListener(e -> editor.deleteSelected());
+        editMenu.add(delete);
+
+        editMenu.addSeparator();
+        JLabel hint = new JLabel("  Shortcuts: see Help > Keybindings  ");
+        hint.setEnabled(false);
+        editMenu.add(hint);
+
+        bar.add(editMenu);
 
         JMenu viewMenu = new JMenu("View");
         JMenuItem resetLayout = new JMenuItem("Reset Layout");
