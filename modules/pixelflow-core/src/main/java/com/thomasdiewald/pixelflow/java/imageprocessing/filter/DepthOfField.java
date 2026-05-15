@@ -43,8 +43,8 @@ public class DepthOfField {
   }
   
   public void apply(RenderTarget src, RenderTarget dst, DwScreenSpaceGeometryBuffer geom) {
-    Texture tex_src  = src         .getTexture();  if(!tex_src .available())  return;
-    Texture tex_geom = geom.pg_geom.getTexture();  if(!tex_geom.available())  return;
+    if (!src.isSampleable()) return;
+    if(!geom.pg_geom.isSampleable()) return;
 
     if(src == dst){
       System.out.println("DepthOfField.apply error: read-write race");
@@ -63,7 +63,7 @@ public class DepthOfField {
     shader.uniform2f     ("focus_pos" , param.focus_pos[0], param.focus_pos[1]);
     shader.uniform1f     ("mult_blur" , param.mult_blur);
     shader.uniformTexture("tex_src"   , src.getGLTextureId());
-    shader.uniformTexture("tex_geom"  , geom.getGLTextureId());
+    shader.uniformTexture("tex_geom"  , geom.pg_geom.getGLTextureId());
     shader.drawFullScreenQuad();
     shader.end();
     context.endDraw();

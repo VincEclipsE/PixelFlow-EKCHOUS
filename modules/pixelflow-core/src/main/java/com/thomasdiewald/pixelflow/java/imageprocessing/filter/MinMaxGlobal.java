@@ -236,7 +236,7 @@ public class MinMaxGlobal {
     if(!pg_src.isSampleable()) return;
     context.begin();
     context.beginDraw(pg_dst);
-    map(pg_dst.getWidth(), pg_dst.getHeight(), src.getGLTextureId(), per_channel);
+    map(pg_dst.getWidth(), pg_dst.getHeight(), pg_src.getGLTextureId(), per_channel);
     context.endDraw();
     context.end("MinMaxGlobal.map");
   }

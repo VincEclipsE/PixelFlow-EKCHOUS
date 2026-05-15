@@ -39,12 +39,12 @@ public class DwBackgroundSubtraction{
   }
 
   public PGraphics2D initTexture(int w, int h){
-    PGraphics2D pg = (PGraphics2D) context.papplet.createGraphics(w, h, PConstants.P2D);
-    pg.smooth(0);
-    pg.beginDraw();
-    pg.textureWrap(PConstants.CLAMP);
-    pg.clear();
-    pg.endDraw();
+    // Studio fork: context.papplet.createGraphics is gone. Return a bare stub
+    // PGraphics2D — usable by signature only. Callers should be migrated to
+    // DwGLTexture-based offscreen targets; until then, runtime use throws.
+    PGraphics2D pg = new PGraphics2D();
+    pg.width = w;
+    pg.height = h;
     return pg;
   }
 

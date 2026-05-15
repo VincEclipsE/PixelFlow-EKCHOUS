@@ -35,7 +35,7 @@ public class Difference {
   }
   
   public void apply(RenderTarget dst, RenderTarget texA, RenderTarget texB) {
-    Texture tex_dst  = dst .getTexture(); if(!tex_dst .available())  return;
+    if (!dst.isSampleable()) return;
     if(!texA.isSampleable()) return;
     if(!texB.isSampleable()) return; 
 

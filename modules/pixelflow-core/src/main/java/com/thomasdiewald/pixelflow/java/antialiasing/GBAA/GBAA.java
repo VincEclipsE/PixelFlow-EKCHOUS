@@ -39,7 +39,8 @@ public class GBAA {
   
   public GBAA(DwPixelFlow context, DwSceneDisplay scene_display){
     this.context = context;
-    this.papplet = context.papplet;
+    // Studio fork: no PApplet on DwPixelFlow. GBAA's papplet field stays null;
+    // runtime use will NPE — that's by design until a real rewrite lands.
     this.scene_display = scene_display;
 
     String[] src_vert = context.utils.readASCIIfile(dir+"GBAA_edges.vert");
@@ -94,7 +95,7 @@ public class GBAA {
     shader_gbaa.begin();
     shader_gbaa.uniform2f     ("wh_rcp" , 1f/w, 1f/h);
     shader_gbaa.uniformTexture("tex_src", src.getGLTextureId());
-    shader_gbaa.uniformTexture("tex_edges", edges.getGLTextureId());
+    shader_gbaa.uniformTexture("tex_edges", pg_edges.getGLTextureId());
     shader_gbaa.drawFullScreenQuad();
     shader_gbaa.end();
     context.endDraw();

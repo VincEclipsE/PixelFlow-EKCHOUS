@@ -75,6 +75,10 @@ public class PShape implements PConstants {
     public void textureMode(int mode) {}
     public void textureWrap(int wrap) {}
     public void texture(PImage img) {}
+    public void setTexture(PImage img) {}
+    public void applyMatrix(PMatrix m) {}
+    public void applyMatrix(PMatrix2D m) {}
+    public void applyMatrix(PMatrix3D m) {}
 
     public void addChild(PShape child) {}
     public int getChildCount() { return 0; }

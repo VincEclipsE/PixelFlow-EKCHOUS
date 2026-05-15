@@ -94,8 +94,14 @@ public class PGraphics extends PImage implements PConstants {
     public void resetMatrix() {}
 
     public boolean is3D() { return false; }
+    public boolean is2D() { return false; }
 
     // Pixel access — minimal
     public void loadPixels() {}
     public void updatePixels() {}
+
+    // PShape factories — Processing's PGraphics provides these
+    public PShape createShape() { return new PShape(); }
+    public PShape createShape(int kind) { return new PShape(kind); }
+    public PShape createShape(int kind, float... params) { return new PShape(kind); }
 }

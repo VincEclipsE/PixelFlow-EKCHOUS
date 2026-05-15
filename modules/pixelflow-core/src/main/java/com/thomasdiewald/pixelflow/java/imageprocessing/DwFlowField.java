@@ -121,7 +121,7 @@ public class DwFlowField {
   
   public void create(RenderTarget pg_src){
     if(!pg_src.isSampleable()) return;
-    create(src.getGLTextureId(), src.getWidth(), src.getHeight());
+    create(pg_src.getGLTextureId(), pg_src.getWidth(), pg_src.getHeight());
   }
   
   public void create(DwGLTexture tex_src){

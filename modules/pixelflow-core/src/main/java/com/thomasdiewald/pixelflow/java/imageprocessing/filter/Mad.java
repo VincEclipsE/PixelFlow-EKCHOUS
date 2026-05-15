@@ -49,10 +49,10 @@ public class Mad {
   
   public void apply(DwGLTexture src, RenderTarget dst, float[] mad) {
     if (!dst.isSampleable()) return;
-       
+
     context.begin();
     context.beginDraw(dst);
-    apply(src.getGLTextureId(), dst.getWidth(), dst.getHeight(), mad);
+    apply(src.HANDLE[0], dst.getWidth(), dst.getHeight(), mad);
     context.endDraw();
     context.end("Mad.apply");
   }
