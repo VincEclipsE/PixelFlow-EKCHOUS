@@ -149,7 +149,9 @@ public final class HeadlessSmoke {
                 .register(studio.nodes.builtin.GraphInputNode.TYPE_ID,
                           studio.nodes.builtin.GraphInputNode::new)
                 .register(studio.nodes.builtin.NoteNode.TYPE_ID,
-                          studio.nodes.builtin.NoteNode::new);
+                          studio.nodes.builtin.NoteNode::new)
+                .register(studio.nodes.builtin.GroupBoxNode.TYPE_ID,
+                          studio.nodes.builtin.GroupBoxNode::new);
     }
 
     /**

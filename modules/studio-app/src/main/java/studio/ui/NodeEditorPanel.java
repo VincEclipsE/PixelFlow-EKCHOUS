@@ -87,6 +87,10 @@ public final class NodeEditorPanel extends JPanel {
     private Point2D marqueeCurrent;
     // Drag-move tracking for multi-select
     private final java.util.Map<Node, int[]> dragStartPositions = new java.util.IdentityHashMap<>();
+    // Group-box resize
+    private Node resizingGroup;
+    private int resizeStartW, resizeStartH;
+    private Point2D resizeAnchor; // world-space corner at drag start
 
     private final NodeFactoryRegistry registry;
     private final studio.graph.UndoStack undo = new studio.graph.UndoStack();
@@ -700,12 +704,21 @@ public final class NodeEditorPanel extends JPanel {
             int lines = Math.max(1, text.split("\\R").length);
             return Math.max(NODE_HEADER, 12 + lines * NOTE_LINE);
         }
+        if (n.typeId().equals(studio.nodes.builtin.GroupBoxNode.TYPE_ID)) {
+            studio.graph.Parameter<?> p = n.parameter("height");
+            return p != null && p.get() instanceof Integer ih ? ih : 200;
+        }
         int rows = Math.max(n.inputs().size(), n.outputs().size());
         return NODE_HEADER + Math.max(2, rows) * ROW_HEIGHT + 8;
     }
 
     private int nodeWidth(Node n) {
-        return n.typeId().equals(studio.nodes.builtin.NoteNode.TYPE_ID) ? NOTE_WIDTH : NODE_WIDTH;
+        if (n.typeId().equals(studio.nodes.builtin.NoteNode.TYPE_ID)) return NOTE_WIDTH;
+        if (n.typeId().equals(studio.nodes.builtin.GroupBoxNode.TYPE_ID)) {
+            studio.graph.Parameter<?> p = n.parameter("width");
+            return p != null && p.get() instanceof Integer iw ? iw : 320;
+        }
+        return NODE_WIDTH;
     }
 
     private Layout layoutOf(Node n) {
@@ -726,8 +739,14 @@ public final class NodeEditorPanel extends JPanel {
         g.scale(zoom, zoom);
 
         drawGrid(g);
+        // Group boxes render BEHIND edges and other nodes.
+        for (Node n : current.graph.nodes()) {
+            if (n.typeId().equals(studio.nodes.builtin.GroupBoxNode.TYPE_ID)) drawGroupBox(g, n);
+        }
         for (Edge e : current.graph.edges()) drawEdge(g, e);
-        for (Node n : current.graph.nodes()) drawNode(g, n);
+        for (Node n : current.graph.nodes()) {
+            if (!n.typeId().equals(studio.nodes.builtin.GroupBoxNode.TYPE_ID)) drawNode(g, n);
+        }
 
         if (marqueeStart != null && marqueeCurrent != null) {
             double mx = Math.min(marqueeStart.getX(), marqueeCurrent.getX());
@@ -928,6 +947,36 @@ public final class NodeEditorPanel extends JPanel {
         }
     }
 
+    private void drawGroupBox(Graphics2D g, Node n) {
+        Layout L = layoutOf(n);
+        int w = nodeWidth(n), h = nodeHeight(n);
+        studio.graph.Parameter<?> pColor = n.parameter("color");
+        float[] c = (pColor != null && pColor.get() instanceof float[] arr && arr.length >= 4) ? arr
+                : new float[]{ 0.5f, 0.65f, 0.95f, 0.18f };
+        Color fill   = new Color(c[0], c[1], c[2], Math.min(0.7f, Math.max(0.05f, c[3])));
+        Color border = new Color(c[0] * 0.7f, c[1] * 0.7f, c[2] * 0.7f, 0.85f);
+
+        // Body
+        g.setColor(fill);
+        g.fillRoundRect(L.x, L.y, w, h, 12, 12);
+        g.setColor(border);
+        g.setStroke(new BasicStroke(isInSelection(n) ? 2.5f : 1.4f));
+        g.drawRoundRect(L.x, L.y, w, h, 12, 12);
+
+        // Title bar
+        g.setColor(new Color(0, 0, 0, 70));
+        g.fillRoundRect(L.x, L.y, w, NODE_HEADER, 12, 12);
+        studio.graph.Parameter<?> pText = n.parameter("text");
+        String text = pText != null && pText.get() != null ? pText.get().toString() : n.label();
+        g.setColor(new Color(230, 230, 240));
+        g.drawString(text, L.x + 8, L.y + 15);
+
+        // Resize handle in bottom-right corner
+        g.setColor(border);
+        int hsz = 10;
+        g.fillRoundRect(L.x + w - hsz - 2, L.y + h - hsz - 2, hsz, hsz, 3, 3);
+    }
+
     private Color portColor(studio.graph.PortType<?> type) {
         if (type == studio.graph.PortTypes.TEXTURE2D) return new Color(120, 200, 200);
         if (type == studio.graph.PortTypes.SCALAR
@@ -1003,18 +1052,43 @@ public final class NodeEditorPanel extends JPanel {
         if (current == null) return null;
         Point2D world = screenToWorld(screen);
         // Iterate in reverse so the most recently-added node wins overlaps.
+        // First pass: regular nodes (note + primitives).
         List<Node> nodes = current.graph.nodes();
         for (int i = nodes.size() - 1; i >= 0; i--) {
             Node n = nodes.get(i);
+            if (n.typeId().equals(studio.nodes.builtin.GroupBoxNode.TYPE_ID)) continue;
             Layout L = layoutOf(n);
-            int h = nodeHeight(n);
-            int w = nodeWidth(n);
+            int h = nodeHeight(n), w = nodeWidth(n);
             if (world.getX() >= L.x && world.getX() <= L.x + w
                     && world.getY() >= L.y && world.getY() <= L.y + h) {
                 return n;
             }
         }
+        // Second pass: group boxes — title bar and resize handle only.
+        for (int i = nodes.size() - 1; i >= 0; i--) {
+            Node n = nodes.get(i);
+            if (!n.typeId().equals(studio.nodes.builtin.GroupBoxNode.TYPE_ID)) continue;
+            Layout L = layoutOf(n);
+            int h = nodeHeight(n), w = nodeWidth(n);
+            // Title bar
+            if (world.getX() >= L.x && world.getX() <= L.x + w
+                    && world.getY() >= L.y && world.getY() <= L.y + NODE_HEADER) return n;
+            // Resize handle
+            int hsz = 10;
+            if (world.getX() >= L.x + w - hsz - 4 && world.getX() <= L.x + w
+                    && world.getY() >= L.y + h - hsz - 4 && world.getY() <= L.y + h) return n;
+        }
         return null;
+    }
+
+    /** True if {@code screen} hit the resize handle of the given group box. */
+    private boolean hitGroupResize(Point screen, Node n) {
+        if (!n.typeId().equals(studio.nodes.builtin.GroupBoxNode.TYPE_ID)) return false;
+        Point2D world = screenToWorld(screen);
+        Layout L = layoutOf(n);
+        int w = nodeWidth(n), h = nodeHeight(n), hsz = 10;
+        return world.getX() >= L.x + w - hsz - 4 && world.getX() <= L.x + w
+            && world.getY() >= L.y + h - hsz - 4 && world.getY() <= L.y + h;
     }
 
     private OutputPort<?> hitOutputPort(Point screen) {
@@ -1153,15 +1227,23 @@ public final class NodeEditorPanel extends JPanel {
                 }
             }
             if (hit != null && e.getButton() == MouseEvent.BUTTON1 && !e.isShiftDown()) {
-                draggingNode = hit;
-                Point2D world = screenToWorld(e.getPoint());
-                Layout L = layoutOf(hit);
-                dragNodeOffset = new Point2D.Double(world.getX() - L.x, world.getY() - L.y);
-                // Snapshot positions of every selected node for group move
-                dragStartPositions.clear();
-                for (Node n : allSelected()) {
-                    Layout p = layouts.get(n);
-                    if (p != null) dragStartPositions.put(n, new int[]{ p.x, p.y });
+                // Group-box resize wins over drag if cursor is on the handle.
+                if (hitGroupResize(e.getPoint(), hit)) {
+                    resizingGroup = hit;
+                    resizeStartW = nodeWidth(hit);
+                    resizeStartH = nodeHeight(hit);
+                    resizeAnchor = screenToWorld(e.getPoint());
+                } else {
+                    draggingNode = hit;
+                    Point2D world = screenToWorld(e.getPoint());
+                    Layout L = layoutOf(hit);
+                    dragNodeOffset = new Point2D.Double(world.getX() - L.x, world.getY() - L.y);
+                    // Snapshot positions of every selected node for group move
+                    dragStartPositions.clear();
+                    for (Node n : allSelected()) {
+                        Layout p = layouts.get(n);
+                        if (p != null) dragStartPositions.put(n, new int[]{ p.x, p.y });
+                    }
                 }
             }
         }
@@ -1187,6 +1269,7 @@ public final class NodeEditorPanel extends JPanel {
                 pushGroupMove();
                 dragStartPositions.clear();
             }
+            resizingGroup = null;
             draggingNode = null;
             dragPanStart = null;
         }
@@ -1199,6 +1282,17 @@ public final class NodeEditorPanel extends JPanel {
             }
             if (marqueeStart != null) {
                 marqueeCurrent = screenToWorld(e.getPoint());
+                repaint();
+                return;
+            }
+            if (resizingGroup != null) {
+                Point2D world = screenToWorld(e.getPoint());
+                int newW = (int) Math.max(80,  resizeStartW + (world.getX() - resizeAnchor.getX()));
+                int newH = (int) Math.max(60,  resizeStartH + (world.getY() - resizeAnchor.getY()));
+                studio.graph.Parameter<?> pw = resizingGroup.parameter("width");
+                studio.graph.Parameter<?> ph = resizingGroup.parameter("height");
+                if (pw != null) ((studio.graph.Parameter) pw).set(newW);
+                if (ph != null) ((studio.graph.Parameter) ph).set(newH);
                 repaint();
                 return;
             }
