@@ -217,6 +217,11 @@ public final class MainFrame extends JFrame {
         frameAll.setAccelerator(KeyStroke.getKeyStroke("F"));
         frameAll.addActionListener(e -> editor.frameAll());
         viewMenu.add(frameAll);
+
+        javax.swing.JCheckBoxMenuItem snap = new javax.swing.JCheckBoxMenuItem("Snap to Grid");
+        snap.setSelected(editor.isSnapToGrid());
+        snap.addActionListener(e -> editor.setSnapToGrid(snap.isSelected()));
+        viewMenu.add(snap);
         bar.add(viewMenu);
 
         JMenu helpMenu = new JMenu("Help");

@@ -1,0 +1,67 @@
+{
+  "schema": "pflow/1",
+  "name": "Fluid edges — Sobel pipeline",
+  "output": {
+    "width": 800,
+    "height": 800,
+    "frames": 60,
+    "rootOutputNode": "n-screen"
+  },
+  "nodes": [
+    {
+      "id": "n-note",
+      "typeId": "studio.builtin.Note",
+      "label": "Note",
+      "layout": { "x": 40, "y": 40 },
+      "params": {
+        "text": "Fluid -> Luminance -> Sobel\nA classic edge-detection pipeline.\nDrag a Bloom in front of the output to glow them."
+      }
+    },
+    {
+      "id": "n-fluid",
+      "typeId": "pf.fluid.DwFluid2D",
+      "label": "fluid",
+      "layout": { "x": 40, "y": 160 },
+      "params": {
+        "width": 800,
+        "height": 800,
+        "grid_scale": 1,
+        "dissipation_velocity": 0.92,
+        "dissipation_density": 0.985,
+        "vorticity": 0.20,
+        "jacobi_iterations": 30,
+        "inject_color": [0.8, 0.9, 1.0, 1.0],
+        "inject_radius": 28.0,
+        "inject_pos": [400.0, 180.0],
+        "inject_velocity": [0.0, 90.0]
+      }
+    },
+    {
+      "id": "n-lum",
+      "typeId": "pf.filter.Luminance",
+      "label": "luminance",
+      "layout": { "x": 320, "y": 160 }
+    },
+    {
+      "id": "n-sobel",
+      "typeId": "pf.filter.Sobel",
+      "label": "sobel",
+      "layout": { "x": 560, "y": 160 },
+      "params": { "kernel": 2 }
+    },
+    {
+      "id": "n-screen",
+      "typeId": "studio.builtin.GraphOutput",
+      "label": "output",
+      "layout": { "x": 820, "y": 160 }
+    }
+  ],
+  "edges": [
+    { "from": { "node": "n-fluid", "port": "density" },
+      "to":   { "node": "n-lum",   "port": "src" } },
+    { "from": { "node": "n-lum",   "port": "dst" },
+      "to":   { "node": "n-sobel", "port": "src" } },
+    { "from": { "node": "n-sobel", "port": "dst" },
+      "to":   { "node": "n-screen", "port": "in" } }
+  ]
+}

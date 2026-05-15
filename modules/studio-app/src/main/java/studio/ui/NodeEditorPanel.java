@@ -428,6 +428,12 @@ public final class NodeEditorPanel extends JPanel {
     private static final int MINIMAP_PAD = 10;
     private boolean showMinimap = true;
 
+    private static final int SNAP_GRID = 16;
+    private boolean snapToGrid = true;
+
+    public boolean isSnapToGrid() { return snapToGrid; }
+    public void setSnapToGrid(boolean on) { this.snapToGrid = on; }
+
     private void drawMinimap(Graphics2D g) {
         if (!showMinimap || current == null || current.graph.nodes().isEmpty()) return;
         int px = getWidth() - MINIMAP_W - MINIMAP_PAD;
@@ -794,8 +800,14 @@ public final class NodeEditorPanel extends JPanel {
             if (draggingNode != null) {
                 Point2D world = screenToWorld(e.getPoint());
                 Layout L = layoutOf(draggingNode);
-                L.x = (int) Math.round(world.getX() - dragNodeOffset.getX());
-                L.y = (int) Math.round(world.getY() - dragNodeOffset.getY());
+                int nx = (int) Math.round(world.getX() - dragNodeOffset.getX());
+                int ny = (int) Math.round(world.getY() - dragNodeOffset.getY());
+                if (snapToGrid) {
+                    nx = Math.round((float) nx / SNAP_GRID) * SNAP_GRID;
+                    ny = Math.round((float) ny / SNAP_GRID) * SNAP_GRID;
+                }
+                L.x = nx;
+                L.y = ny;
                 repaint();
             } else if (dragPanStart != null) {
                 panX = dragPanStartX + (e.getX() - dragPanStart.x);
