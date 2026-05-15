@@ -34,8 +34,11 @@ import studio.save.PflowReader;
  */
 public final class ParameterPanel extends JPanel {
 
-    private final JLabel header = new JLabel("(no node selected)");
+    private final JLabel typeLabel = new JLabel(" ");
+    private final JTextField nameField = new JTextField();
+    private final JPanel headerWrap = new JPanel(new BorderLayout(4, 2));
     private final JPanel body = new JPanel();
+    private Runnable onLabelChange;
 
     @SuppressWarnings("unused")
     private final StudioModel model;
@@ -50,9 +53,31 @@ public final class ParameterPanel extends JPanel {
         JScrollPane scroll = new JScrollPane(body);
         scroll.getVerticalScrollBar().setUnitIncrement(16);
 
-        header.setBorder(BorderFactory.createEmptyBorder(6, 8, 6, 8));
-        add(header, BorderLayout.NORTH);
+        nameField.setBorder(BorderFactory.createEmptyBorder(2, 4, 2, 4));
+        nameField.setToolTipText("Rename this node");
+        nameField.addActionListener(e -> applyLabel());
+        nameField.addFocusListener(new java.awt.event.FocusAdapter() {
+            @Override public void focusLost(java.awt.event.FocusEvent e) { applyLabel(); }
+        });
+        typeLabel.setForeground(new Color(140, 140, 150));
+        typeLabel.setBorder(BorderFactory.createEmptyBorder(0, 8, 4, 8));
+
+        headerWrap.setBorder(BorderFactory.createEmptyBorder(6, 6, 0, 6));
+        headerWrap.add(nameField, BorderLayout.NORTH);
+        headerWrap.add(typeLabel, BorderLayout.CENTER);
+        add(headerWrap, BorderLayout.NORTH);
         add(scroll, BorderLayout.CENTER);
+    }
+
+    /** Optional callback fired after the user renames the active node via the panel. */
+    public void setOnLabelChange(Runnable r) { this.onLabelChange = r; }
+
+    private void applyLabel() {
+        if (active == null) return;
+        String text = nameField.getText().trim();
+        if (text.isEmpty() || text.equals(active.label())) return;
+        active.setLabel(text);
+        if (onLabelChange != null) onLabelChange.run();
     }
 
     public void attachGraph(PflowReader.Result loaded) {
@@ -76,13 +101,17 @@ public final class ParameterPanel extends JPanel {
     private void rebuildBody() {
         body.removeAll();
         if (active != null) {
-            header.setText(active.label() + "  —  " + active.typeId());
+            nameField.setText(active.label());
+            nameField.setEnabled(true);
+            typeLabel.setText(active.typeId());
             for (Parameter<?> p : active.parameters()) {
                 body.add(buildRow(p));
                 body.add(Box.createVerticalStrut(2));
             }
         } else {
-            header.setText("(no node selected)");
+            nameField.setText("");
+            nameField.setEnabled(false);
+            typeLabel.setText("(no node selected)");
         }
         body.add(Box.createVerticalGlue());
         body.revalidate();
