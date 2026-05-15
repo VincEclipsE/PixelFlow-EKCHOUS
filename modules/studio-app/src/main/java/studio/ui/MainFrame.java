@@ -172,11 +172,37 @@ public final class MainFrame extends JFrame {
         bar.add(fileMenu);
 
         JMenu helpMenu = new JMenu("Help");
+        JMenuItem keys = new JMenuItem("Keybindings");
+        keys.setAccelerator(KeyStroke.getKeyStroke("F1"));
+        keys.addActionListener(e -> JOptionPane.showMessageDialog(
+                this,
+                """
+                Canvas
+                  Left-drag node       Move node
+                  Middle-drag          Pan canvas
+                  Mouse-wheel          Zoom
+                  Home                 Reset pan/zoom
+                  F9                   Toggle minimap
+                  Right-click edge     Disconnect
+                  Drag output→input    Create edge
+
+                Selected node
+                  Delete               Remove
+                  M                    Mute / unmute (skip per-frame eval)
+                  Ctrl+D               Duplicate
+
+                File
+                  Ctrl+O   Open       Ctrl+S   Save
+                  Ctrl+Shift+S Save As
+                  Ctrl+T   Save as Tool   F5  Reload
+                """,
+                "Keybindings", JOptionPane.INFORMATION_MESSAGE));
+        helpMenu.add(keys);
         JMenuItem about = new JMenuItem("About");
         about.addActionListener(e -> JOptionPane.showMessageDialog(
                 this,
-                "PixelFlow Studio — M3 v1\n\nGraph runtime running live in an embedded JOGL canvas.\n"
-                        + "Edit parameters on the right; changes propagate to the next sim frame.",
+                "PixelFlow Studio — M3.5\n\nCompose PixelFlow GPU primitives into reusable tools.\n"
+                        + "Drag from the palette, wire ports by drag, save compositions as new tools.",
                 "About", JOptionPane.INFORMATION_MESSAGE));
         helpMenu.add(about);
         bar.add(helpMenu);

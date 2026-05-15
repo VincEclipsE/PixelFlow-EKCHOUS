@@ -6,6 +6,7 @@ import java.awt.datatransfer.StringSelection;
 import java.awt.datatransfer.Transferable;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.TreeSet;
 
 import javax.swing.BorderFactory;
@@ -16,7 +17,10 @@ import javax.swing.JLabel;
 import javax.swing.JList;
 import javax.swing.JPanel;
 import javax.swing.JScrollPane;
+import javax.swing.JTextField;
 import javax.swing.TransferHandler;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
 
 import studio.graph.NodeFactoryRegistry;
 import studio.nodes.builtin.GraphOutputNode;
@@ -25,10 +29,10 @@ import studio.nodes.fluid.FluidNode;
 import studio.save.ToolsLibrary;
 
 /**
- * Tool palette. Lists registered node typeIds; the user can drag an entry
- * onto the {@link NodeEditorPanel} to add a new node to the current graph.
- * After {@link #reload()} the list re-syncs with the registry + tools
- * library (used after a Save-as-Tool).
+ * Tool palette. Lists registered node typeIds with a search box at the top;
+ * the user can drag an entry onto the {@link NodeEditorPanel} to add a new
+ * node to the current graph. After {@link #reload()} the list re-syncs with
+ * the registry + tools library (used after a Save-as-Tool or a hot-reload).
  */
 public final class ToolPalette extends JPanel {
 
@@ -37,12 +41,22 @@ public final class ToolPalette extends JPanel {
     private final NodeFactoryRegistry registry;
     private final ToolsLibrary toolsLibrary;
     private final DefaultListModel<String> model = new DefaultListModel<>();
+    private final JTextField search = new JTextField();
+    private final List<String> allIds = new ArrayList<>();
 
     public ToolPalette(NodeFactoryRegistry registry, ToolsLibrary toolsLibrary) {
         super(new BorderLayout());
         this.registry = registry;
         this.toolsLibrary = toolsLibrary;
         setBorder(BorderFactory.createTitledBorder("Tools"));
+
+        search.setToolTipText("Filter tools…");
+        search.getDocument().addDocumentListener(new DocumentListener() {
+            @Override public void insertUpdate(DocumentEvent e) { applyFilter(); }
+            @Override public void removeUpdate(DocumentEvent e) { applyFilter(); }
+            @Override public void changedUpdate(DocumentEvent e) { applyFilter(); }
+        });
+        add(search, BorderLayout.NORTH);
 
         JList<String> list = new JList<>(model);
         list.setVisibleRowCount(20);
@@ -69,17 +83,26 @@ public final class ToolPalette extends JPanel {
 
     /** Refresh the displayed list from the registry + tools library. */
     public void reload() {
-        model.clear();
+        allIds.clear();
         TreeSet<String> ids = new TreeSet<>();
-        // Built-in primitives
         for (String id : builtinTypeIds()) {
             if (registry.has(id)) ids.add(id);
         }
-        // User-saved tools from the ToolsLibrary
         if (toolsLibrary != null) {
             ids.addAll(toolsLibrary.registeredTypeIds());
         }
-        for (String id : ids) model.addElement(id);
+        allIds.addAll(ids);
+        applyFilter();
+    }
+
+    private void applyFilter() {
+        String q = search.getText().trim().toLowerCase(Locale.ROOT);
+        model.clear();
+        for (String id : allIds) {
+            if (q.isEmpty() || id.toLowerCase(Locale.ROOT).contains(q)) {
+                model.addElement(id);
+            }
+        }
     }
 
     private static List<String> builtinTypeIds() {
