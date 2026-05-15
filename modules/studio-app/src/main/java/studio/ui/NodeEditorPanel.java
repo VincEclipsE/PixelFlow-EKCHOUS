@@ -261,6 +261,7 @@ public final class NodeEditorPanel extends JPanel {
     }
 
     private static final String CLIPBOARD_MARKER = "studio.node:";
+    private static final String CLIPBOARD_MULTI_MARKER = "studio.nodes:";
 
     public void deleteSelected() {
         if (selected == null || current == null) return;
@@ -504,25 +505,37 @@ public final class NodeEditorPanel extends JPanel {
     @SuppressWarnings({"rawtypes", "unchecked"})
     public void copySelectedToClipboard() {
         if (selected == null) return;
-        studio.save.PflowJson.NodeJson nj = new studio.save.PflowJson.NodeJson();
-        nj.typeId = selected.typeId();
-        nj.label = selected.label();
-        if (!selected.isEnabled()) nj.enabled = Boolean.FALSE;
-        for (studio.graph.Parameter<?> p : selected.parameters()) {
-            Object v = p.get();
-            if (v instanceof float[] arr) {
-                java.util.ArrayList<Float> list = new java.util.ArrayList<>(arr.length);
-                for (float f : arr) list.add(f);
-                nj.params.put(p.name, list);
-            } else if (v != null) {
-                nj.params.put(p.name, v);
+        java.util.List<Node> sources = allSelected();
+        java.util.List<studio.save.PflowJson.NodeJson> payload = new java.util.ArrayList<>();
+        for (Node n : sources) {
+            studio.save.PflowJson.NodeJson nj = new studio.save.PflowJson.NodeJson();
+            nj.typeId = n.typeId();
+            nj.label = n.label();
+            if (!n.isEnabled()) nj.enabled = Boolean.FALSE;
+            Layout L = layouts.get(n);
+            if (L != null) nj.layout = new studio.save.PflowJson.Layout(L.x, L.y);
+            for (studio.graph.Parameter<?> p : n.parameters()) {
+                Object v = p.get();
+                if (v instanceof float[] arr) {
+                    java.util.ArrayList<Float> list = new java.util.ArrayList<>(arr.length);
+                    for (float f : arr) list.add(f);
+                    nj.params.put(p.name, list);
+                } else if (v != null) {
+                    nj.params.put(p.name, v);
+                }
             }
+            payload.add(nj);
         }
         try {
-            String json = studio.save.JsonCodec.writeString(nj);
-            java.awt.datatransfer.StringSelection sel = new java.awt.datatransfer.StringSelection(CLIPBOARD_MARKER + json);
+            String json = studio.save.JsonCodec.writeString(payload);
+            java.awt.datatransfer.StringSelection sel = new java.awt.datatransfer.StringSelection(
+                    CLIPBOARD_MULTI_MARKER + json);
             java.awt.Toolkit.getDefaultToolkit().getSystemClipboard().setContents(sel, sel);
-            if (statusBar != null) statusBar.info("Copied " + selected.label() + " to clipboard");
+            if (statusBar != null) {
+                statusBar.info(sources.size() == 1
+                        ? "Copied " + selected.label() + " to clipboard"
+                        : "Copied " + sources.size() + " nodes to clipboard");
+            }
         } catch (Exception ex) {
             if (statusBar != null) statusBar.error("Copy failed: " + ex.getMessage());
         }
@@ -534,24 +547,68 @@ public final class NodeEditorPanel extends JPanel {
         try {
             Object data = java.awt.Toolkit.getDefaultToolkit().getSystemClipboard()
                     .getData(java.awt.datatransfer.DataFlavor.stringFlavor);
-            if (!(data instanceof String s) || !s.startsWith(CLIPBOARD_MARKER)) return;
-            studio.save.PflowJson.NodeJson nj = studio.save.JsonCodec.readString(
-                    s.substring(CLIPBOARD_MARKER.length()), studio.save.PflowJson.NodeJson.class);
-            Node node = registry.create(nj.typeId);
-            if (nj.label != null) node.setLabel(nj.label);
-            if (nj.enabled != null) node.setEnabled(nj.enabled);
-            if (nj.params != null) {
-                for (studio.graph.Parameter<?> p : node.parameters()) {
-                    Object raw = nj.params.get(p.name);
-                    if (raw == null) continue;
-                    Object coerced = studio.save.ParamCoercion.coerce(p, raw);
-                    if (coerced != null) ((studio.graph.Parameter) p).set(coerced);
+            if (!(data instanceof String s)) return;
+            java.util.List<studio.save.PflowJson.NodeJson> payload = new java.util.ArrayList<>();
+            if (s.startsWith(CLIPBOARD_MULTI_MARKER)) {
+                studio.save.PflowJson.NodeJson[] arr = studio.save.JsonCodec.readString(
+                        s.substring(CLIPBOARD_MULTI_MARKER.length()),
+                        studio.save.PflowJson.NodeJson[].class);
+                java.util.Collections.addAll(payload, arr);
+            } else if (s.startsWith(CLIPBOARD_MARKER)) {
+                studio.save.PflowJson.NodeJson nj = studio.save.JsonCodec.readString(
+                        s.substring(CLIPBOARD_MARKER.length()),
+                        studio.save.PflowJson.NodeJson.class);
+                payload.add(nj);
+            } else {
+                return;
+            }
+            if (payload.isEmpty()) return;
+
+            // Compute origin relative to the selection's primary so a multi-paste
+            // preserves the relative arrangement of the copied nodes.
+            int minX = Integer.MAX_VALUE, minY = Integer.MAX_VALUE;
+            for (var nj : payload) {
+                if (nj.layout != null && nj.layout.x != null && nj.layout.y != null) {
+                    minX = Math.min(minX, nj.layout.x);
+                    minY = Math.min(minY, nj.layout.y);
                 }
             }
-            Layout origin = selected != null ? layoutOf(selected) : new Layout(LAYOUT_ORIGIN_X, LAYOUT_ORIGIN_Y);
-            doAddNode(node, origin.x + 24, origin.y + 24);
-            setSelection(node);
-            if (statusBar != null) statusBar.info("Pasted " + node.label());
+            if (minX == Integer.MAX_VALUE) { minX = 0; minY = 0; }
+            int anchorX = LAYOUT_ORIGIN_X, anchorY = LAYOUT_ORIGIN_Y;
+            if (selected != null) {
+                Layout L = layoutOf(selected);
+                anchorX = L.x + 24;
+                anchorY = L.y + 24;
+            }
+            java.util.List<Node> created = new java.util.ArrayList<>();
+            for (var nj : payload) {
+                Node node = registry.create(nj.typeId);
+                if (nj.label != null) node.setLabel(nj.label);
+                if (nj.enabled != null) node.setEnabled(nj.enabled);
+                if (nj.params != null) {
+                    for (studio.graph.Parameter<?> p : node.parameters()) {
+                        Object raw = nj.params.get(p.name);
+                        if (raw == null) continue;
+                        Object coerced = studio.save.ParamCoercion.coerce(p, raw);
+                        if (coerced != null) ((studio.graph.Parameter) p).set(coerced);
+                    }
+                }
+                int x, y;
+                if (nj.layout != null && nj.layout.x != null && nj.layout.y != null) {
+                    x = anchorX + (nj.layout.x - minX);
+                    y = anchorY + (nj.layout.y - minY);
+                } else {
+                    x = anchorX; y = anchorY;
+                }
+                doAddNode(node, x, y);
+                created.add(node);
+            }
+            setMultiSelection(created);
+            if (statusBar != null) {
+                statusBar.info(created.size() == 1
+                        ? "Pasted " + created.get(0).label()
+                        : "Pasted " + created.size() + " nodes");
+            }
         } catch (Exception ex) {
             if (statusBar != null) statusBar.error("Paste failed: " + ex.getMessage());
         }
