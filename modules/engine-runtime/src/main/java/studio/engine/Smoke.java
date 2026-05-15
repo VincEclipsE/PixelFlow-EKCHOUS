@@ -74,21 +74,10 @@ public final class Smoke {
                 ctx = new DwPixelFlow(gl, resources);
                 ctx.printGL();
                 // GL3 core profile requires a VAO bound before any draw call.
+                // PJOGL used to bind one implicitly; we have to do it ourselves.
                 int[] vao = new int[1];
                 gl.getGL2ES3().glGenVertexArrays(1, vao, 0);
                 gl.getGL2ES3().glBindVertexArray(vao[0]);
-                // Wire up JOGL's debug pipe so GL errors come back with source info.
-                try {
-                    d.getContext().enableGLDebugMessage(true);
-                    d.getContext().addGLDebugListener(e -> {
-                        int sev = e.getDbgSeverity();
-                        if (sev == 0x9146 || sev == 0x9147) {
-                            System.err.println("[GL] " + e.getDbgMsg());
-                        }
-                    });
-                } catch (Throwable t) {
-                    System.err.println("[GL] debug listener unavailable: " + t.getMessage());
-                }
                 scene.init(ctx);
             }
 
@@ -124,6 +113,17 @@ public final class Smoke {
         animator.start();
     }
 
+    /** Drain pending GL errors (debugging aid). */
+    static void drainErrors(GL2ES2 gl, String where) {
+        int code;
+        int count = 0;
+        while ((code = gl.glGetError()) != GL.GL_NO_ERROR) {
+            System.out.println("[drain " + where + "] GL_ERROR=0x" + Integer.toHexString(code));
+            count++;
+            if (count > 16) break;
+        }
+    }
+
     /**
      * Self-contained scene: a fluid sim with one orange density+velocity
      * injection per frame at a fixed location.
@@ -143,7 +143,6 @@ public final class Smoke {
             fluid.param.dissipation_temperature = 0.65f;
             fluid.param.vorticity               = 0.15f;
             fluid.param.num_jacobi_projection   = 30;
-
             target = GLTextureTarget.create(ctx, W, H);
         }
 
@@ -157,17 +156,17 @@ public final class Smoke {
             float cy = H * 0.25f;
             fluid.addDensity (cx, cy, 30, 1.0f, 0.45f, 0.05f, 1.0f);
             fluid.addVelocity(cx, cy, 30, 0f, +80f);
-
             fluid.update();
             fluid.renderFluidTextures(target, 0);
 
             // Blit the offscreen target onto the window default framebuffer.
             GL2ES2 gl = ctx.gl;
-            ctx.framebuffer.bind(target.texture);                // bind FBO with target as color-0
+            ctx.framebuffer.bind(target.texture);
             gl.glBindFramebuffer(GL.GL_READ_FRAMEBUFFER, ctx.framebuffer.HANDLE_fbo[0]);
             gl.glBindFramebuffer(GL.GL_DRAW_FRAMEBUFFER, 0);
             GL2ES3 gles3 = gl.getGL2ES3();
             int dw = d.getSurfaceWidth(), dh = d.getSurfaceHeight();
+            gles3.glReadBuffer(GL.GL_COLOR_ATTACHMENT0);
             gles3.glBlitFramebuffer(0, 0, W, H, 0, 0, dw, dh,
                     GL.GL_COLOR_BUFFER_BIT, GL.GL_NEAREST);
             gl.glBindFramebuffer(GL.GL_READ_FRAMEBUFFER, 0);

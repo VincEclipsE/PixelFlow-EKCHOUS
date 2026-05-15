@@ -118,27 +118,26 @@ public class DwGLFrameBuffer {
    
   
   public void bind(DwGLTexture ... tex){
-   
+
     if(IS_ACTIVE){
       unbind(); // unbind, in case of bind() is called consecutively
     }
-    
-    int count = tex.length;  
+
+    int count = tex.length;
     if(count > max_draw_buffers){
       System.out.println("WARNING: DwGLFrameBuffer.bind(...) number of textures exceeds max limit: "+count+" > "+max_draw_buffers);
       count = max_draw_buffers;
     }
     bind_color_attachments = new int[count];
     bind_targets           = new int[count];
-    
+
     bindFBO();
     for(int i = 0; i < count; i++){
       bind_color_attachments[i] = GL2ES2.GL_COLOR_ATTACHMENT0 + i;
       bind_targets          [i] = tex[i].target;
       gl.glFramebufferTexture2D(GL2ES2.GL_FRAMEBUFFER, bind_color_attachments[i], tex[i].target, tex[i].HANDLE[0], 0);
     }
-    
-    
+
     gl.glDrawBuffers(bind_color_attachments.length, bind_color_attachments, 0);
     IS_ACTIVE = true;
   }
