@@ -148,10 +148,11 @@ public final class ToolPalette extends JPanel {
     }
 
     private static final List<String> CATEGORY_ORDER = List.of(
-            "Fluid", "Filter", "Image", "Flow field", "Anti-aliasing",
+            "Input", "Fluid", "Filter", "Image", "Flow field", "Anti-aliasing",
             "Built-in", "Sample tools", "User tools");
 
     private static String categoryOf(String typeId) {
+        if (typeId.startsWith("studio.input"))   return "Input";
         if (typeId.startsWith("pf.fluid"))       return "Fluid";
         if (typeId.startsWith("pf.filter"))      return "Filter";
         if (typeId.startsWith("pf.image"))       return "Image";
@@ -188,6 +189,8 @@ public final class ToolPalette extends JPanel {
         ids.add(studio.nodes.aa.SmaaNode.TYPE_ID);
         ids.add(studio.nodes.aa.FxaaNode.TYPE_ID);
         ids.add(studio.nodes.flowfield.FlowFieldNode.TYPE_ID);
+        ids.add(studio.nodes.flowfield.FlowFieldParticlesNode.TYPE_ID);
+        ids.add(studio.nodes.input.MouseNode.TYPE_ID);
         ids.add(GraphOutputNode.TYPE_ID);
         ids.add(studio.nodes.builtin.GraphInputNode.TYPE_ID);
         ids.add(studio.nodes.builtin.NoteNode.TYPE_ID);

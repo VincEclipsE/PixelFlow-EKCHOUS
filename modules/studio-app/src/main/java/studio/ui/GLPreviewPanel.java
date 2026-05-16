@@ -90,8 +90,89 @@ public final class GLPreviewPanel extends JPanel {
         canvas.addGLEventListener(new Listener());
         add(canvas, BorderLayout.CENTER);
 
+        // Wire mouse → runtime.mouseState. We map preview-screen pixels back
+        // to source-canvas pixels (un-letterbox) so downstream nodes that
+        // expect coords in an 800×800 fluid space see them that way.
+        java.awt.event.MouseAdapter mouseAdapter = new java.awt.event.MouseAdapter() {
+            @Override public void mousePressed(java.awt.event.MouseEvent e) {
+                updateMouse(e.getX(), e.getY(), true);
+                if (e.getButton() == java.awt.event.MouseEvent.BUTTON1) setPrimaryDown(true);
+                if (e.getButton() == java.awt.event.MouseEvent.BUTTON3) setRightDown(true);
+            }
+            @Override public void mouseReleased(java.awt.event.MouseEvent e) {
+                updateMouse(e.getX(), e.getY(), true);
+                if (e.getButton() == java.awt.event.MouseEvent.BUTTON1) setPrimaryDown(false);
+                if (e.getButton() == java.awt.event.MouseEvent.BUTTON3) setRightDown(false);
+            }
+            @Override public void mouseDragged(java.awt.event.MouseEvent e) { updateMouse(e.getX(), e.getY(), true); }
+            @Override public void mouseMoved(java.awt.event.MouseEvent e)   { updateMouse(e.getX(), e.getY(), true); }
+            @Override public void mouseEntered(java.awt.event.MouseEvent e) { setInside(true); }
+            @Override public void mouseExited(java.awt.event.MouseEvent e)  { setInside(false); }
+        };
+        canvas.addMouseListener(mouseAdapter);
+        canvas.addMouseMotionListener(mouseAdapter);
+
         animator = new FPSAnimator(canvas, 60, true);
         animator.start();
+    }
+
+    /* ----------------------- mouse → runtime bridge ----------------------- */
+    private volatile int sourceW = 800, sourceH = 800;
+
+    // Published from the GL thread inside swapProject() so the EDT mouse
+    // listeners have a happens-before view of the live MouseState. We can't
+    // reach through `runtime` here because that field isn't volatile and
+    // would leave the EDT seeing a stale null indefinitely.
+    private volatile studio.graph.MouseState mouseRef;
+
+    private void updateMouse(int sx, int sy, boolean inside) {
+        studio.graph.MouseState m = mouseRef;
+        if (m == null) return;
+        // Recompute letterbox in Swing-component coords (not GL surface coords,
+        // which differ on HiDPI). Same aspect-fit math as the blit.
+        int dw = canvas.getWidth();
+        int dh = canvas.getHeight();
+        if (dw <= 0 || dh <= 0 || sourceW <= 0 || sourceH <= 0) return;
+        double srcAr = (double) sourceW / sourceH;
+        double dstAr = (double) dw / dh;
+        int outW, outH;
+        if (dstAr > srcAr) { outH = dh; outW = (int) Math.round(dh * srcAr); }
+        else               { outW = dw; outH = (int) Math.round(dw / srcAr); }
+        int outX = (dw - outW) / 2;
+        int outY = (dh - outH) / 2;
+        float fx = (sx - outX) * (sourceW / (float) Math.max(1, outW));
+        float fy = (sy - outY) * (sourceH / (float) Math.max(1, outH));
+        // Drop "inside" when the click landed in a letterbox bar so spawn /
+        // inject gates downstream see the click as off-canvas. Then clamp
+        // coords so the value we publish is at least sensible.
+        boolean withinRender = (sx >= outX && sx < outX + outW && sy >= outY && sy < outY + outH);
+        fx = Math.max(0f, Math.min(sourceW, fx));
+        fy = Math.max(0f, Math.min(sourceH, fy));
+        // Swing reports y growing downward; the fluid/particles render via a
+        // textured quad whose UV (0,0) is at the bottom of the viewport, so a
+        // raw Swing y would inject at the visually mirrored row. Flip here so
+        // downstream nodes see y in the same orientation the user clicked.
+        m.x = fx;
+        m.y = sourceH - fy;
+        m.inside = inside && withinRender;
+        m.width  = sourceW;
+        m.height = sourceH;
+    }
+
+    private void setPrimaryDown(boolean v) {
+        studio.graph.MouseState m = mouseRef;
+        if (m == null) return;
+        m.down = v;
+    }
+    private void setRightDown(boolean v) {
+        studio.graph.MouseState m = mouseRef;
+        if (m == null) return;
+        m.rightDown = v;
+    }
+    private void setInside(boolean v) {
+        studio.graph.MouseState m = mouseRef;
+        if (m == null) return;
+        m.inside = v;
     }
 
     /** Queue a new project to be activated on the next GL frame. */
@@ -234,6 +315,7 @@ public final class GLPreviewPanel extends JPanel {
         }
 
         @Override public void dispose(GLAutoDrawable d) {
+            mouseRef = null;
             if (runtime != null) { runtime.dispose(); runtime = null; }
             if (ctx != null) { ctx.dispose(); ctx = null; }
         }
@@ -241,6 +323,7 @@ public final class GLPreviewPanel extends JPanel {
         private void swapProject(PflowReader.Result loaded) {
             if (runtime != null) runtime.dispose();
             runtime = new GraphRuntime(loaded.graph, new GraphContext(ctx));
+            mouseRef = runtime.context().mouse();
             rootOutput = pickRootOutput(loaded);
             lastLoaded = loaded;
         }
@@ -259,18 +342,16 @@ public final class GLPreviewPanel extends JPanel {
         }
 
         private void clearToBackdrop(GL2ES2 gl) {
-            gl.glClearColor(0.10f, 0.10f, 0.12f, 1.0f);
+            // Slightly darker than the surrounding Swing chrome so the active
+            // canvas (cleared in blitToScreen) reads as a distinct surface.
+            gl.glClearColor(0.04f, 0.04f, 0.06f, 1.0f);
             gl.glClear(GL.GL_COLOR_BUFFER_BIT);
         }
 
         private void blitToScreen(GLAutoDrawable d, RenderTarget rt) {
             GL2ES2 gl = ctx.gl;
-            // Bind via the int-handle overload so we don't depend on a DwGLTexture instance.
-            ctx.framebuffer.bind(rt.getGLTextureId());
-            gl.glBindFramebuffer(GL.GL_READ_FRAMEBUFFER, ctx.framebuffer.HANDLE_fbo[0]);
-            gl.glBindFramebuffer(GL.GL_DRAW_FRAMEBUFFER, 0);
             GL2ES3 gles3 = gl.getGL2ES3();
-            gles3.glReadBuffer(GL.GL_COLOR_ATTACHMENT0);
+            ensureBlitProgram(gl);
 
             int dw = d.getSurfaceWidth(), dh = d.getSurfaceHeight();
             int sw = rt.getWidth(), sh = rt.getHeight();
@@ -288,14 +369,120 @@ public final class GLPreviewPanel extends JPanel {
             int outX = (dw - outW) / 2;
             int outY = (dh - outH) / 2;
 
-            // Backdrop wipe so the letterbox bars look right.
-            gl.glClearColor(0.10f, 0.10f, 0.12f, 1f);
+            // Record source dims so mouse → source mapping stays correct.
+            sourceW = sw;
+            sourceH = sh;
+
+            // Bind GLJPanel's draw FBO. JOGL hooks framebuffer=0 to redirect
+            // to the offscreen surface Swing reads back. (glBlitFramebuffer is
+            // unreliable against this hook on AMD/Windows, so we draw a
+            // textured fullscreen quad instead — that path works fine.)
+            gl.glBindFramebuffer(GL.GL_FRAMEBUFFER, 0);
+            gl.glDisable(GL.GL_SCISSOR_TEST);
+            gl.glDisable(GL.GL_DEPTH_TEST);
+            gl.glDisable(GL.GL_CULL_FACE);
+            gl.glDisable(GL.GL_BLEND);
+            gl.glColorMask(true, true, true, true);
+
+            // Backdrop clear (darker than surrounding chrome so the canvas
+            // edge reads as distinct).
+            gl.glClearColor(0.04f, 0.04f, 0.06f, 1f);
             gl.glClear(GL.GL_COLOR_BUFFER_BIT);
 
-            gles3.glBlitFramebuffer(0, 0, sw, sh,
-                    outX, outY, outX + outW, outY + outH,
-                    GL.GL_COLOR_BUFFER_BIT, GL.GL_LINEAR);
-            gl.glBindFramebuffer(GL.GL_READ_FRAMEBUFFER, 0);
+            // Draw the source texture into the letterboxed active region.
+            gl.glViewport(outX, outY, outW, outH);
+            gl.glUseProgram(blitProgram);
+            gl.glActiveTexture(GL.GL_TEXTURE0);
+            gl.glBindTexture(GL.GL_TEXTURE_2D, rt.getGLTextureId());
+            gl.glUniform1i(blitTexLoc, 0);
+            gles3.glBindVertexArray(blitVao);
+            gl.glDrawArrays(GL.GL_TRIANGLES, 0, 3);
+            gles3.glBindVertexArray(0);
+            gl.glBindTexture(GL.GL_TEXTURE_2D, 0);
+            gl.glUseProgram(0);
+            // Restore full-surface viewport for the outline pass.
+            gl.glViewport(0, 0, dw, dh);
+
+            // Outline the active region in a noticeable colour so the user
+            // can see exactly where click-and-drag is meaningful.
+            gl.glEnable(GL.GL_SCISSOR_TEST);
+            gl.glClearColor(0.35f, 0.65f, 0.85f, 1f);
+            int bw = 2;
+            // top
+            gl.glScissor(outX - bw, outY + outH, outW + 2 * bw, bw);
+            gl.glClear(GL.GL_COLOR_BUFFER_BIT);
+            // bottom
+            gl.glScissor(outX - bw, outY - bw, outW + 2 * bw, bw);
+            gl.glClear(GL.GL_COLOR_BUFFER_BIT);
+            // left
+            gl.glScissor(outX - bw, outY, bw, outH);
+            gl.glClear(GL.GL_COLOR_BUFFER_BIT);
+            // right
+            gl.glScissor(outX + outW, outY, bw, outH);
+            gl.glClear(GL.GL_COLOR_BUFFER_BIT);
+            gl.glDisable(GL.GL_SCISSOR_TEST);
         }
+
+        private void ensureBlitProgram(GL2ES2 gl) {
+            if (blitProgram != 0) return;
+            String vs = String.join("\n",
+                    "#version 330 core",
+                    "out vec2 vUv;",
+                    "void main() {",
+                    "  vec2 p = vec2((gl_VertexID << 1) & 2, gl_VertexID & 2);",
+                    "  vUv = p;",
+                    "  gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0);",
+                    "}");
+            String fs = String.join("\n",
+                    "#version 330 core",
+                    "in vec2 vUv;",
+                    "out vec4 fragColor;",
+                    "uniform sampler2D tex;",
+                    "void main() {",
+                    "  fragColor = texture(tex, vUv);",
+                    "}");
+            int v = compileShader(gl, GL2ES2.GL_VERTEX_SHADER,   vs);
+            int f = compileShader(gl, GL2ES2.GL_FRAGMENT_SHADER, fs);
+            blitProgram = gl.glCreateProgram();
+            gl.glAttachShader(blitProgram, v);
+            gl.glAttachShader(blitProgram, f);
+            gl.glLinkProgram(blitProgram);
+            int[] linkStatus = new int[1];
+            gl.glGetProgramiv(blitProgram, GL2ES2.GL_LINK_STATUS, linkStatus, 0);
+            if (linkStatus[0] == 0) {
+                int[] logLen = new int[1];
+                gl.glGetProgramiv(blitProgram, GL2ES2.GL_INFO_LOG_LENGTH, logLen, 0);
+                byte[] log = new byte[Math.max(1, logLen[0])];
+                gl.glGetProgramInfoLog(blitProgram, log.length, null, 0, log, 0);
+                throw new RuntimeException("blit program link failed: " + new String(log));
+            }
+            gl.glDeleteShader(v);
+            gl.glDeleteShader(f);
+            blitTexLoc = gl.glGetUniformLocation(blitProgram, "tex");
+            int[] vao = new int[1];
+            gl.getGL2ES3().glGenVertexArrays(1, vao, 0);
+            blitVao = vao[0];
+        }
+
+        private int compileShader(GL2ES2 gl, int type, String source) {
+            int s = gl.glCreateShader(type);
+            gl.glShaderSource(s, 1, new String[]{ source }, new int[]{ source.length() }, 0);
+            gl.glCompileShader(s);
+            int[] status = new int[1];
+            gl.glGetShaderiv(s, GL2ES2.GL_COMPILE_STATUS, status, 0);
+            if (status[0] == 0) {
+                int[] logLen = new int[1];
+                gl.glGetShaderiv(s, GL2ES2.GL_INFO_LOG_LENGTH, logLen, 0);
+                byte[] log = new byte[Math.max(1, logLen[0])];
+                gl.glGetShaderInfoLog(s, log.length, null, 0, log, 0);
+                throw new RuntimeException("blit shader compile failed (type=0x"
+                        + Integer.toHexString(type) + "): " + new String(log));
+            }
+            return s;
+        }
+
+        private int blitProgram;
+        private int blitVao;
+        private int blitTexLoc;
     }
 }

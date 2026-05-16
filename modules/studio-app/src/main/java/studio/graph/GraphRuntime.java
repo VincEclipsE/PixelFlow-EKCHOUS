@@ -67,6 +67,9 @@ public final class GraphRuntime {
             }
         }
 
+        // Snap prev = current so per-frame mouse delta is well-defined even when
+        // the EDT delivers multiple drag events between frames.
+        context.mouse().snapshotPrev();
         lastTimeSec = nowSec;
         frameIndex++;
     }

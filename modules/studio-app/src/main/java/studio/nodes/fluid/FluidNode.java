@@ -7,6 +7,7 @@ import studio.engine.RenderTarget;
 import studio.graph.AbstractNode;
 import studio.graph.Frame;
 import studio.graph.GraphContext;
+import studio.graph.InputPort;
 import studio.graph.OutputPort;
 import studio.graph.Parameter;
 import studio.graph.PortTypes;
@@ -26,6 +27,17 @@ public final class FluidNode extends AbstractNode {
     public static final String TYPE_ID = "pf.fluid.DwFluid2D";
 
     public final OutputPort<RenderTarget> outDensity;
+    public final OutputPort<RenderTarget> outVelocity;
+
+    /**
+     * Optional inputs. When connected, they override the corresponding
+     * parameter values for that frame — letting upstream nodes (e.g. a
+     * {@link studio.nodes.input.MouseNode}) drive the injection without the
+     * user manually editing the param fields.
+     */
+    public final InputPort<float[]> inInjectPos;
+    public final InputPort<float[]> inInjectVelocity;
+    public final InputPort<Boolean> inInjectActive;
 
     public final Parameter<Integer> pWidth;
     public final Parameter<Integer> pHeight;
@@ -41,9 +53,14 @@ public final class FluidNode extends AbstractNode {
 
     private DwFluid2D fluid;
     private GLTextureTarget target;
+    private GLTextureTarget velocityTarget;
 
     public FluidNode() {
-        this.outDensity = declareOutput("density", PortTypes.TEXTURE2D);
+        this.outDensity  = declareOutput("density",  PortTypes.TEXTURE2D);
+        this.outVelocity = declareOutput("velocity", PortTypes.TEXTURE2D);
+        this.inInjectPos      = declareInput("inject_pos",      PortTypes.VEC2, false);
+        this.inInjectVelocity = declareInput("inject_velocity", PortTypes.VEC2, false);
+        this.inInjectActive   = declareInput("inject_active",   PortTypes.BOOL, false);
 
         this.pWidth      = declareParam(Parameter.intRange("width",  800, 64, 8192).structural());
         this.pHeight     = declareParam(Parameter.intRange("height", 800, 64, 8192).structural());
@@ -82,21 +99,35 @@ public final class FluidNode extends AbstractNode {
         fluid.param.vorticity             = pVorticity.get();
         fluid.param.num_jacobi_projection = pJacobi.get();
 
-        float[] pos = pInjectPos.get();
-        float[] vel = pInjectVelocity.get();
+        // Inputs override params when wired.
+        float[] inPos = f.read(inInjectPos);
+        float[] inVel = f.read(inInjectVelocity);
+        Boolean inAct = f.read(inInjectActive);
+
+        float[] pos = inPos != null ? inPos : pInjectPos.get();
+        float[] vel = inVel != null ? inVel : pInjectVelocity.get();
         float[] col = pInjectColor.get();
         float radius = pInjectRadius.get();
+        boolean active = inAct != null ? inAct : true;
 
-        fluid.addDensity(pos[0], pos[1], radius, col[0], col[1], col[2], col[3]);
-        fluid.addVelocity(pos[0], pos[1], radius, vel[0], vel[1]);
+        if (active) {
+            fluid.addDensity(pos[0], pos[1], radius, col[0], col[1], col[2], col[3]);
+            fluid.addVelocity(pos[0], pos[1], radius, vel[0], vel[1]);
+        }
         fluid.update();
         fluid.renderFluidTextures(target, 0);
-
+        // tex_velocity.src ping-pongs each frame; wrap fresh so consumers
+        // (FlowFieldParticlesNode) see the latest. The wrapper is a thin
+        // adapter — no extra GPU resources.
+        velocityTarget = new GLTextureTarget(f.pixelFlow(), fluid.tex_velocity.src);
         f.publish(outDensity, target);
+        f.publish(outVelocity, velocityTarget);
     }
 
     @Override public void dispose(GraphContext ctx) {
         if (fluid != null)  { fluid.release();  fluid = null; }
         if (target != null) { target.release(); target = null; }
+        // velocityTarget wraps the fluid's own DwGLTexture — do not release.
+        velocityTarget = null;
     }
 }

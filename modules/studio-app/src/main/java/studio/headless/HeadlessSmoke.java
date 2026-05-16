@@ -57,13 +57,21 @@ public final class HeadlessSmoke {
         new studio.save.ToolsLibrary(Paths.get("tools"), registry).rescan();
         PflowReader reader = new PflowReader(registry);
 
-        // Try filesystem first, then classpath.
+        // Try filesystem first, then classpath. Pseudo-path "default" runs the
+        // code-built default scene (mouse → fluid → particles), useful for
+        // smoke-testing the interactive demo without a .pflow file. Mouse
+        // is faked here (held down, drifting) so the simulation produces
+        // something visible.
         PflowReader.Result loaded;
-        Path projFile = Paths.get(projectPath);
-        if (java.nio.file.Files.exists(projFile)) {
-            loaded = reader.load(projFile);
+        if ("default".equals(projectPath)) {
+            loaded = studio.ui.DefaultScene.build(registry);
         } else {
-            loaded = reader.loadFromClasspath(projectPath);
+            Path projFile = Paths.get(projectPath);
+            if (java.nio.file.Files.exists(projFile)) {
+                loaded = reader.load(projFile);
+            } else {
+                loaded = reader.loadFromClasspath(projectPath);
+            }
         }
 
         int width  = pickInt(loaded.source.output, "width", 800);
@@ -156,6 +164,11 @@ public final class HeadlessSmoke {
                           studio.nodes.aa.FxaaNode::new)
                 .register(studio.nodes.flowfield.FlowFieldNode.TYPE_ID,
                           studio.nodes.flowfield.FlowFieldNode::new)
+                .register(studio.nodes.flowfield.FlowFieldParticlesNode.TYPE_ID,
+                          studio.nodes.flowfield.FlowFieldParticlesNode::new)
+                // Input
+                .register(studio.nodes.input.MouseNode.TYPE_ID,
+                          studio.nodes.input.MouseNode::new)
                 // Boundaries
                 .register(GraphOutputNode.TYPE_ID,           GraphOutputNode::new)
                 .register(studio.nodes.builtin.GraphInputNode.TYPE_ID,
@@ -204,6 +217,16 @@ public final class HeadlessSmoke {
                 gl.getGL2ES3().glBindVertexArray(vao[0]);
 
                 runtime = new GraphRuntime(loaded.graph, new GraphContext(ctx));
+                // For the "default" pseudo-project, fake a held-down,
+                // animated mouse so the mouse-driven scene produces a
+                // non-empty PNG in headless mode.
+                if ("default".equals(System.getProperty("project", ""))) {
+                    studio.graph.MouseState m = runtime.context().mouse();
+                    m.down = true;
+                    m.inside = true;
+                    m.width = 800;
+                    m.height = 800;
+                }
 
                 String rootId = loaded.source.output != null ? loaded.source.output.rootOutputNode : null;
                 if (rootId == null) {
@@ -232,6 +255,13 @@ public final class HeadlessSmoke {
         @Override public void display(GLAutoDrawable d) {
             if (failure != null || runtime == null) return;
             try {
+                // Default-scene only: animate the faked mouse in a circle.
+                if ("default".equals(System.getProperty("project", ""))) {
+                    studio.graph.MouseState m = runtime.context().mouse();
+                    double t = framesDriven / 30.0;
+                    m.x = (float) (400 + 220 * Math.cos(t));
+                    m.y = (float) (400 + 220 * Math.sin(t));
+                }
                 runtime.renderFrame();
                 framesDriven++;
                 if (framesDriven == totalFrames) {

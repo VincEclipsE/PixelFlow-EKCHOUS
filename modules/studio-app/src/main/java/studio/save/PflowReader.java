@@ -29,7 +29,7 @@ public final class PflowReader {
         /** node-id (string) → constructed Node instance. */
         public final Map<String, Node> nodesById;
 
-        Result(Graph graph, PflowJson src, Map<String, Node> nodesById) {
+        public Result(Graph graph, PflowJson src, Map<String, Node> nodesById) {
             this.graph = graph;
             this.source = src;
             this.nodesById = nodesById;

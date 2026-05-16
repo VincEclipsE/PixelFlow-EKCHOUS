@@ -61,6 +61,15 @@ public final class StudioModel {
         for (Consumer<PflowReader.Result> l : listeners) l.accept(loaded);
     }
 
+    /** Adopt a programmatically-built scene (e.g. {@link DefaultScene}) as
+     *  the current project. Path stays null so Ctrl+S routes to Save As. */
+    public void adopt(PflowReader.Result loaded) {
+        this.currentPath = null;
+        this.current = loaded;
+        clearDirty();
+        for (Consumer<PflowReader.Result> l : listeners) l.accept(loaded);
+    }
+
     /** Reload the project from its current path. No-op if none loaded. */
     public void reload() {
         if (currentPath == null) return;

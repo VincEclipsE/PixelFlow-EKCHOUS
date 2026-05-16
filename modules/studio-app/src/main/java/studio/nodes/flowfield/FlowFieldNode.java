@@ -23,16 +23,22 @@ public final class FlowFieldNode extends AbstractNode {
 
     public final InputPort<RenderTarget>  in;
     public final OutputPort<RenderTarget> out;
+    /** Raw RG velocity texture (DwFlowField.tex_vel) wrapped as a RenderTarget.
+     *  Downstream particle/advection consumers should sample this, not the
+     *  visualised {@code dst}. */
+    public final OutputPort<RenderTarget> outVel;
     public final Parameter<Integer> pBlurIterations;
     public final Parameter<Integer> pBlurRadius;
 
     private DwFlowField field;
     private GLTextureTarget dst;
+    private GLTextureTarget velTarget;
     private int lastW = -1, lastH = -1;
 
     public FlowFieldNode() {
         this.in  = declareInput("src",  PortTypes.TEXTURE2D);
         this.out = declareOutput("dst", PortTypes.TEXTURE2D);
+        this.outVel = declareOutput("vel", PortTypes.TEXTURE2D);
         this.pBlurIterations = declareParam(Parameter.intRange("blur_iterations", 1, 0, 8));
         this.pBlurRadius     = declareParam(Parameter.intRange("blur_radius", 2, 0, 16));
     }
@@ -57,10 +63,18 @@ public final class FlowFieldNode extends AbstractNode {
         field.param.blur_radius     = pBlurRadius.get();
         field.create(src);
         field.displayLineIntegralConvolution(dst, src);
+        velTarget = new GLTextureTarget(f.pixelFlow(), field.tex_vel);
         f.publish(out, dst);
+        f.publish(outVel, velTarget);
     }
+
+    /** Direct access to the underlying DwFlowField for downstream consumers
+     *  that need it (FlowFieldParticlesNode binds to it via the velocity tex). */
+    public DwFlowField field() { return field; }
 
     @Override public void dispose(GraphContext ctx) {
         if (dst != null) { dst.release(); dst = null; }
+        // velTarget wraps field.tex_vel; field.release happens via its owner.
+        velTarget = null;
     }
 }

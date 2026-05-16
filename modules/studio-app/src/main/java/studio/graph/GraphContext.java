@@ -13,6 +13,7 @@ public final class GraphContext {
 
     private final DwPixelFlow pixelFlow;
     private final GraphErrors errors = new GraphErrors();
+    private final MouseState mouse = new MouseState();
 
     public GraphContext(DwPixelFlow pixelFlow) {
         this.pixelFlow = Objects.requireNonNull(pixelFlow, "pixelFlow");
@@ -20,4 +21,7 @@ public final class GraphContext {
 
     public DwPixelFlow pixelFlow() { return pixelFlow; }
     public GraphErrors errors()    { return errors; }
+
+    /** Shared per-frame mouse state. The host UI writes; nodes read. */
+    public MouseState mouse() { return mouse; }
 }

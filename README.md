@@ -33,7 +33,8 @@ Requires JDK 17. From the repo root:
 ./gradlew build
 ./gradlew :engine-runtime:run -PmainClass=studio.engine.Smoke        # M1 smoke test
 ./gradlew :studio-app:run -PmainClass=studio.headless.HeadlessSmoke  # M2 headless render
-./gradlew :studio-app:run                                            # M3 full UI
+./gradlew :studio-app:run                                            # M3 full UI (loads interactive default scene)
+./gradlew :studio-app:run -PmainClass=studio.headless.HeadlessSmoke -Pproject=default  # smoke the default scene
 ./gradlew :studio-app:packageExe                                     # M4 Windows installer
 ```
 

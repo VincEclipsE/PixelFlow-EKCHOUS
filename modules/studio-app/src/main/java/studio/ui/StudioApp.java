@@ -13,8 +13,6 @@ import com.thomasdiewald.pixelflow.java.dwgl.DwGLError;
  */
 public final class StudioApp {
 
-    public static final String DEFAULT_PROJECT = "starters/fluid-bloom.pflow";
-
     public static void main(String[] args) {
         // Silence the known-phantom Fluid.addDensity GL_INVALID_OPERATION from
         // the AMD/JOGL combination (diagnosed in M1, see commit ea6cf64).
@@ -29,7 +27,14 @@ public final class StudioApp {
         SwingUtilities.invokeLater(() -> {
             MainFrame frame = new MainFrame();
             frame.setVisible(true);
-            frame.openProject(DEFAULT_PROJECT);
+            // Optional CLI arg: a .pflow path; otherwise show the
+            // mouse-driven flow-field-particles default scene so the
+            // user has something interactive to test against immediately.
+            if (args.length >= 1 && args[0] != null && !args[0].isBlank()) {
+                frame.openProject(args[0]);
+            } else {
+                frame.openDefaultScene();
+            }
         });
     }
 

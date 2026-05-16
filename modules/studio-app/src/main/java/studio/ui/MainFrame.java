@@ -89,8 +89,10 @@ public final class MainFrame extends JFrame {
         this.model.setDirtyListener(this::refreshTitle);
 
         JSplitPane center = new JSplitPane(JSplitPane.VERTICAL_SPLIT, editor, preview);
-        center.setResizeWeight(0.55);
-        center.setDividerLocation(480);
+        // Preview is the interactive surface — give it ~half the vertical
+        // room so click+drag has space; editor stays usable above.
+        center.setResizeWeight(0.42);
+        center.setDividerLocation(360);
 
         JSplitPane right = new JSplitPane(JSplitPane.HORIZONTAL_SPLIT, center, parameters);
         right.setResizeWeight(1.0);
@@ -145,6 +147,11 @@ public final class MainFrame extends JFrame {
         JMenuBar bar = new JMenuBar();
 
         JMenu fileMenu = new JMenu("File");
+        JMenuItem newScene = new JMenuItem("New (Default Scene)");
+        newScene.setAccelerator(KeyStroke.getKeyStroke("ctrl N"));
+        newScene.addActionListener(e -> { if (confirmCloseIfDirty()) openDefaultScene(); });
+        fileMenu.add(newScene);
+
         JMenuItem open = new JMenuItem("Open project…");
         open.setAccelerator(KeyStroke.getKeyStroke("ctrl O"));
         open.addActionListener(e -> chooseProject());
@@ -354,6 +361,19 @@ public final class MainFrame extends JFrame {
             Path p = chooser.getSelectedFile().toPath();
             openProject(p.toString());
         }
+    }
+
+    /** Adopt the built-in interactive default scene as the current project. */
+    public void openDefaultScene() {
+        SwingUtilities.invokeLater(() -> {
+            try {
+                model.adopt(DefaultScene.build(registry));
+                refreshTitle();
+                statusBar.info("Default scene loaded — click + drag inside the preview");
+            } catch (Exception ex) {
+                statusBar.error("Default scene failed: " + ex.getMessage());
+            }
+        });
     }
 
     public void openProject(String path) {
