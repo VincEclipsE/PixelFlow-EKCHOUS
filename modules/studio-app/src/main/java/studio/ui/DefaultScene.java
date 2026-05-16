@@ -52,22 +52,40 @@ public final class DefaultScene {
         fluid.setLabel("fluid");
         fluid.pWidth.set(canvasW);
         fluid.pHeight.set(canvasH);
+        // DwFluid2D raises every dissipation param to the 0.05 power per
+        // frame, so even 0.5 is ~96.7% retention/frame. Bias high enough
+        // that density and velocity persist long enough to be transported
+        // by buoyancy rather than just fading in place.
         fluid.pDissipationVelocity.set(0.92f);
-        fluid.pDissipationDensity.set(0.985f);
-        fluid.pVorticity.set(0.2f);
-        fluid.pInjectRadius.set(22f);
-        fluid.pInjectColor.set(new float[]{ 0.95f, 0.55f, 0.15f, 1f });
+        fluid.pDissipationDensity.set(0.999f);
+        fluid.pDissipationTemperature.set(0.85f);
+        fluid.pVorticity.set(0.30f);
+        // Without temperature + buoyancy the fluid has no sustained force —
+        // strokes freeze the moment the user stops injecting. With buoyancy
+        // on and a hot injection the smoke rises, curls, and mixes with
+        // itself like the reference demo. inject_temperature is set deliberately
+        // high — DwFluid2D's per-frame buoyancy force is small (0.125 * dtemp),
+        // so it takes 2-3+ degrees of dtemp to overpower mass at this radius.
+        fluid.pApplyBuoyancy.set(true);
+        fluid.pInjectTemperature.set(3.0f);
+        fluid.pInjectRadius.set(30f);
+        fluid.pInjectColor.set(new float[]{ 1.0f, 0.7f, 0.25f, 1.0f });
 
         FlowFieldParticlesNode particles = (FlowFieldParticlesNode) registry.create(FlowFieldParticlesNode.TYPE_ID);
         particles.setLabel("flow particles");
         particles.pCanvasWidth.set(canvasW);
         particles.pCanvasHeight.set(canvasH);
         particles.pMaxParticles.set(32_768);
-        particles.pSpawnPerFrame.set(300);
-        particles.pSpawnRadius.set(18f);
-        particles.pPointSize.set(7);
-        particles.pColorA.set(new float[]{ 1.0f, 0.85f, 0.4f, 3.5f });
-        particles.pAccelerationMul.set(2.0f);
+        particles.pSpawnPerFrame.set(200);
+        particles.pSpawnRadius.set(22f);
+        particles.pPointSize.set(4);
+        particles.pColorA.set(new float[]{ 1.0f, 0.85f, 0.4f, 1.8f });
+        // DwFlowFieldParticles uses the input texture as an ACCELERATION field
+        // (not velocity), so particles only ride the fluid when the field
+        // dominates their inertia. Crank accel_mul and drop damping so the
+        // fluid's flow is what's visible, not the particles' own momentum.
+        particles.pAccelerationMul.set(6.0f);
+        particles.pVelocityDamping.set(0.92f);
 
         GraphOutputNode out = (GraphOutputNode) registry.create(GraphOutputNode.TYPE_ID);
         out.setLabel("screen");

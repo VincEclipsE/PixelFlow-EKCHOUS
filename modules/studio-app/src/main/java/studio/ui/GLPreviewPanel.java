@@ -395,6 +395,7 @@ public final class GLPreviewPanel extends JPanel {
             gl.glActiveTexture(GL.GL_TEXTURE0);
             gl.glBindTexture(GL.GL_TEXTURE_2D, rt.getGLTextureId());
             gl.glUniform1i(blitTexLoc, 0);
+            gl.glUniform3f(blitBackdropLoc, 0.04f, 0.04f, 0.06f);
             gles3.glBindVertexArray(blitVao);
             gl.glDrawArrays(GL.GL_TRIANGLES, 0, 3);
             gles3.glBindVertexArray(0);
@@ -433,13 +434,23 @@ public final class GLPreviewPanel extends JPanel {
                     "  vUv = p;",
                     "  gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0);",
                     "}");
+            // Composite the source texture's alpha against the backdrop colour
+            // here in the shader instead of relying on Swing to do it. The
+            // density render shader produces RGBA where alpha decays as the
+            // density dissipates but RGB stays at full saturation; without
+            // this in-shader composite, low-alpha cells get blended against
+            // the JPanel's light default background and look "stuck" at full
+            // colour even as alpha falls to ~0.
             String fs = String.join("\n",
                     "#version 330 core",
                     "in vec2 vUv;",
                     "out vec4 fragColor;",
                     "uniform sampler2D tex;",
+                    "uniform vec3 backdrop;",
                     "void main() {",
-                    "  fragColor = texture(tex, vUv);",
+                    "  vec4 t = texture(tex, vUv);",
+                    "  float a = clamp(t.a, 0.0, 1.0);",
+                    "  fragColor = vec4(mix(backdrop, t.rgb, a), 1.0);",
                     "}");
             int v = compileShader(gl, GL2ES2.GL_VERTEX_SHADER,   vs);
             int f = compileShader(gl, GL2ES2.GL_FRAGMENT_SHADER, fs);
@@ -458,7 +469,8 @@ public final class GLPreviewPanel extends JPanel {
             }
             gl.glDeleteShader(v);
             gl.glDeleteShader(f);
-            blitTexLoc = gl.glGetUniformLocation(blitProgram, "tex");
+            blitTexLoc      = gl.glGetUniformLocation(blitProgram, "tex");
+            blitBackdropLoc = gl.glGetUniformLocation(blitProgram, "backdrop");
             int[] vao = new int[1];
             gl.getGL2ES3().glGenVertexArrays(1, vao, 0);
             blitVao = vao[0];
@@ -484,5 +496,6 @@ public final class GLPreviewPanel extends JPanel {
         private int blitProgram;
         private int blitVao;
         private int blitTexLoc;
+        private int blitBackdropLoc;
     }
 }

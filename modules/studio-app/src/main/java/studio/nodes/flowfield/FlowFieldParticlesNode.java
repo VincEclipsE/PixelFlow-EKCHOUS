@@ -2,6 +2,7 @@ package studio.nodes.flowfield;
 
 import com.thomasdiewald.pixelflow.java.flowfieldparticles.DwFlowFieldParticles;
 import com.thomasdiewald.pixelflow.java.imageprocessing.filter.DwFilter;
+import com.thomasdiewald.pixelflow.java.imageprocessing.filter.Merge.TexMad;
 
 import studio.engine.GLTextureTarget;
 import studio.engine.RenderTarget;
@@ -54,9 +55,14 @@ public final class FlowFieldParticlesNode extends AbstractNode {
     public final Parameter<Boolean> pTrailMode;
     public final Parameter<Integer> pCanvasWidth;
     public final Parameter<Integer> pCanvasHeight;
+    public final Parameter<Float>   pTrailDecay;
 
     private DwFlowFieldParticles particles;
     private GLTextureTarget canvas;
+    // Ping-pong buffer that accumulates particle renders across frames, multiplied
+    // down by (1 - trail_decay) each frame. Gives particles a smooth visual
+    // lifespan without needing per-particle age tracking in the library.
+    private GLTextureTarget trailA, trailB;
     private int lastW = -1, lastH = -1;
 
     public FlowFieldParticlesNode() {
@@ -87,6 +93,8 @@ public final class FlowFieldParticlesNode extends AbstractNode {
                 .withDescription("Render particles as connected lines instead of points."));
         this.pCanvasWidth     = declareParam(Parameter.intRange("canvas_width",  800, 64, 8192).structural());
         this.pCanvasHeight    = declareParam(Parameter.intRange("canvas_height", 800, 64, 8192).structural());
+        this.pTrailDecay      = declareParam(Parameter.floatRange("trail_decay", 0.03f, 0f, 1f)
+                .withDescription("Per-frame decay of the particle trail buffer. 0 = trail never fades (particles smear forever). 1 = no trail (particles disappear next frame). ~0.03 gives a ~1s smoke-trail lifespan."));
     }
 
     @Override public String typeId() { return TYPE_ID; }
@@ -106,7 +114,11 @@ public final class FlowFieldParticlesNode extends AbstractNode {
         int h = pCanvasHeight.get();
         if (canvas == null || w != lastW || h != lastH) {
             if (canvas != null) canvas.release();
+            if (trailA != null) trailA.release();
+            if (trailB != null) trailB.release();
             canvas = GLTextureTarget.create(f.pixelFlow(), w, h);
+            trailA = GLTextureTarget.create(f.pixelFlow(), w, h);
+            trailB = GLTextureTarget.create(f.pixelFlow(), w, h);
             particles.resizeWorld(w, h);
             lastW = w; lastH = h;
         }
@@ -135,23 +147,46 @@ public final class FlowFieldParticlesNode extends AbstractNode {
         // acceleration field, then composite into our canvas.
         particles.update(velTex.texture);
 
-        // Background pass: optional input or solid backdrop.
         RenderTarget bg = f.read(inBg);
-        if (bg != null && bg.isSampleable()) {
-            DwFilter.get(f.pixelFlow()).copy.apply(bg, canvas);
-        } else {
-            f.pixelFlow().begin();
-            f.pixelFlow().beginDraw(canvas);
-            f.gl().glClearColor(0f, 0f, 0f, 1f);
-            f.gl().glClear(com.jogamp.opengl.GL.GL_COLOR_BUFFER_BIT);
-            f.pixelFlow().endDraw();
-            f.pixelFlow().end("FlowFieldParticles.bg");
-        }
+        DwFilter filter = DwFilter.get(f.pixelFlow());
+        float trailMul = 1f - pTrailDecay.get();
 
-        if (pTrailMode.get()) {
-            particles.displayTrail(canvas);
+        if (trailMul > 0f) {
+            // Trail mode. Each frame: darken the previous trail by (1 - decay)
+            // into the back buffer, swap, then render this frame's particles on
+            // top with the library's additive blending. Compose bg + trail into
+            // the published canvas.
+            filter.mad.apply(trailA, trailB, new float[]{ trailMul, 0f });
+            GLTextureTarget tmp = trailA; trailA = trailB; trailB = tmp;
+            if (pTrailMode.get()) {
+                particles.displayTrail(trailA);
+            } else {
+                particles.displayParticles(trailA);
+            }
+            if (bg != null && bg.isSampleable()) {
+                filter.merge.apply(canvas,
+                        new TexMad(bg,     1f, 0f),
+                        new TexMad(trailA, 1f, 0f));
+            } else {
+                filter.copy.apply(trailA, canvas);
+            }
         } else {
-            particles.displayParticles(canvas);
+            // No-trail path: clear/copy bg, render particles directly on top.
+            if (bg != null && bg.isSampleable()) {
+                filter.copy.apply(bg, canvas);
+            } else {
+                f.pixelFlow().begin();
+                f.pixelFlow().beginDraw(canvas);
+                f.gl().glClearColor(0f, 0f, 0f, 1f);
+                f.gl().glClear(com.jogamp.opengl.GL.GL_COLOR_BUFFER_BIT);
+                f.pixelFlow().endDraw();
+                f.pixelFlow().end("FlowFieldParticles.bg");
+            }
+            if (pTrailMode.get()) {
+                particles.displayTrail(canvas);
+            } else {
+                particles.displayParticles(canvas);
+            }
         }
         f.publish(out, canvas);
     }
@@ -159,5 +194,7 @@ public final class FlowFieldParticlesNode extends AbstractNode {
     @Override public void dispose(GraphContext ctx) {
         if (particles != null) { particles.release(); particles = null; }
         if (canvas != null)    { canvas.release(); canvas = null; }
+        if (trailA != null)    { trailA.release(); trailA = null; }
+        if (trailB != null)    { trailB.release(); trailB = null; }
     }
 }
